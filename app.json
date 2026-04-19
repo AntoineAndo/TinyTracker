@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Tiny Tracker",
-    "slug": "tiny-tracker",
+    "slug": "track-it",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
