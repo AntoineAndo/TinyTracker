@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Tiny Tracker",
-    "slug": "tiny-tracker",
+    "slug": "track-it",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -12,7 +12,7 @@
       "supportsTablet": true
     },
     "android": {
-      "package": "com.antoineando.trackit",
+      "package": "com.antoineando.tinytracker",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
