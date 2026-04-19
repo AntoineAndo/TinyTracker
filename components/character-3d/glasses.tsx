@@ -1,7 +1,7 @@
 import { useGLTF } from '@react-three/drei/native';
 import { BoxGeometry, CylinderGeometry, DoubleSide, MeshToonMaterial } from 'three';
 import { useEffect, useMemo, useRef } from 'react';
-import type { Mesh } from 'three';
+import type { Mesh, Object3D } from 'three';
 
 import type { CharacterConfig } from '../character-avatar';
 
@@ -16,12 +16,13 @@ const BRIDGE_Z = 0.97;
 const EYE_Y = 0.05;
 
 function ShellGlasses({ color }: { color: string }) {
-  const { scene } = useGLTF(require('./shell-glasses.glb'));
+  const gltf = useGLTF(require('./shell-glasses.glb'));
+  const { scene } = Array.isArray(gltf) ? gltf[0] : gltf;
   const material = useRef(new MeshToonMaterial({ color, side: DoubleSide }));
 
   const clone = useMemo(() => {
     const c = scene.clone(true);
-    c.traverse((obj) => {
+    c.traverse((obj: Object3D) => {
       if ((obj as Mesh).isMesh) (obj as Mesh).material = material.current;
     });
     return c;

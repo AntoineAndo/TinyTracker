@@ -1,7 +1,7 @@
 import { useGLTF } from '@react-three/drei/native';
 import { DoubleSide, MeshToonMaterial } from 'three';
 import { useEffect, useMemo, useRef } from 'react';
-import type { Mesh } from 'three';
+import type { Mesh, Object3D } from 'three';
 
 useGLTF.preload(require('./head.glb'));
 
@@ -10,12 +10,13 @@ interface HeadProps {
 }
 
 export function Head({ skinColor }: HeadProps) {
-  const { scene } = useGLTF(require('./head.glb'));
+  const gltf = useGLTF(require('./head.glb'));
+  const { scene } = Array.isArray(gltf) ? gltf[0] : gltf;
   const material = useRef(new MeshToonMaterial({ color: skinColor, side: DoubleSide }));
 
   const clone = useMemo(() => {
     const c = scene.clone(true);
-    c.traverse((obj) => {
+    c.traverse((obj: Object3D) => {
       if ((obj as Mesh).isMesh) (obj as Mesh).material = material.current;
     });
     return c;

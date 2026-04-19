@@ -7,7 +7,7 @@ import {
   Vector3,
 } from 'three';
 import { useEffect, useRef, useMemo } from 'react';
-import type { Mesh } from 'three';
+import type { Mesh, Object3D } from 'three';
 
 import type { CharacterConfig } from '../character-avatar';
 
@@ -19,12 +19,13 @@ interface HairProps {
 }
 
 function ShortHair({ color }: { color: string }) {
-  const { scene } = useGLTF(require('./short-hair.glb'));
+  const gltf = useGLTF(require('./short-hair.glb'));
+  const { scene } = Array.isArray(gltf) ? gltf[0] : gltf;
   const material = useRef(new MeshToonMaterial({ color, side: DoubleSide }));
 
   const clone = useMemo(() => {
     const c = scene.clone(true);
-    c.traverse((obj) => {
+    c.traverse((obj: Object3D) => {
       if ((obj as Mesh).isMesh) (obj as Mesh).material = material.current;
     });
     return c;
