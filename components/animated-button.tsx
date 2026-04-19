@@ -51,7 +51,10 @@ export function AnimatedButton({
 
   return (
     <AnimatedPressable
-      style={[style, { transform: [{ scale: scaleAnim }] }]}
+      style={(state) => [
+        typeof style === 'function' ? style(state) : style,
+        { transform: [{ scale: scaleAnim }] },
+      ]}
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
       {...rest}

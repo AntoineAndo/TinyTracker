@@ -46,7 +46,7 @@ const darkTheme = {
   drawerBg: '#1e2124',
 };
 
-export type AppTheme = typeof lightTheme;
+export type AppTheme = typeof lightTheme | typeof darkTheme;
 
 export function useTheme(): AppTheme {
   const scheme = useAppColorScheme();
