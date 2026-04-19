@@ -1,8 +1,8 @@
 name: Release
 
 on:
-  push:
-    branches: [main]
+  release:
+    types: [published]
 
 jobs:
   build-and-submit:
@@ -28,6 +28,3 @@ jobs:
 
       - name: Build
         run: eas build --platform all --non-interactive
-
-      - name: Submit
-        run: eas submit --platform all --non-interactive
