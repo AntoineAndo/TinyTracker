@@ -1,50 +1,49 @@
-# Welcome to your Expo app 👋
+# Tiny Tracker
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A tiny app to track anything in your daily life — fully offline.
 
-## Get started
+Built with [Expo](https://expo.dev) and React Native.
 
-1. Install dependencies
+## Features
 
-   ```bash
-   npm install
-   ```
+- **Multiple tracker types** — Yes/No, count toward a target, 1–5 range, or running number log
+- **Goal & neutral orientations** — goal trackers show streaks and a "Done" button; neutral trackers show Yes/No and no streak
+- **Flexible frequency** — daily, weekly, or every N days
+- **Streaks** — automatic streak tracking for daily goal trackers
+- **Reminders** — optional per-tracker push notifications
+- **Fully offline** — all data stored locally on device, no account required
+- **Dark mode** — follows system appearance
 
-2. Start the app
+## Getting started
 
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+Install dependencies:
 
 ```bash
-npm run reset-project
+npm install
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+Start the development server:
 
-## Learn more
+```bash
+npx expo start
+```
 
-To learn more about developing your project with Expo, look at the following resources:
+Then open the app in an [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/), [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/), or on a physical device via [Expo Go](https://expo.dev/go).
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+## Project structure
 
-## Join the community
+```
+app/          Screen routes (Expo Router file-based routing)
+components/   Shared UI components
+context/      React contexts (trackers, settings)
+hooks/        Custom hooks
+lib/          Types, utilities, and storage layer
+assets/       Images and fonts
+```
 
-Join our community of developers creating universal apps.
+## Tech stack
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+- [Expo](https://expo.dev) / React Native
+- [Expo Router](https://docs.expo.dev/router/introduction/) for file-based navigation
+- [AsyncStorage](https://react-native-async-storage.github.io/async-storage/) for offline persistence
+- [React Hook Form](https://react-hook-form.com/) for tracker forms
