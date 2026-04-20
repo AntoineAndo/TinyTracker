@@ -21,6 +21,7 @@ import { fromDateString, getCurrentDay, toDateString } from '@/lib/utils';
 const CHUNK_DAYS = 90;
 
 interface TrackersContextValue {
+  isLoading: boolean;
   trackers: Tracker[];
   entries: Entry[];
   hasMoreEntries: boolean;
@@ -42,6 +43,7 @@ const TrackersContext = createContext<TrackersContextValue | null>(null);
 export function TrackersProvider({ children }: { children: React.ReactNode }) {
   const { dayStartHour } = useSettings();
 
+  const [isLoading, setIsLoading] = useState(true);
   const [realTrackers, setRealTrackers] = useState<Tracker[]>([]);
   const [realEntries, setRealEntries] = useState<Entry[]>([]);
   const [chunkIndex, setChunkIndex] = useState<ChunkIndex>([]);
@@ -59,6 +61,7 @@ export function TrackersProvider({ children }: { children: React.ReactNode }) {
       setChunkIndex(index);
       setRealEntries(entries);
       setLoadedChunkCount(initialChunkCount);
+      setIsLoading(false);
     }
     load();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -177,6 +180,7 @@ export function TrackersProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <TrackersContext.Provider value={{
+      isLoading,
       trackers, entries, hasMoreEntries, loadMoreEntries,
       mockMode, setMockMode,
       addTracker, updateTracker, deleteTracker,

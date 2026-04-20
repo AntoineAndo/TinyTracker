@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { CharacterAvatar } from '@/components/character-avatar';
 import { EditEntryDrawer } from '@/components/edit-entry-drawer';
@@ -64,7 +64,7 @@ function dueLabel(daysUntil: number): string {
 }
 
 export default function TodayScreen() {
-  const { trackers, entries, addEntry, updateEntry, completeEntry, deleteEntry } = useTrackers();
+  const { isLoading, trackers, entries, addEntry, updateEntry, completeEntry, deleteEntry } = useTrackers();
   const { characterConfig } = useSettings();
   const [showAll, setShowAll] = useState(false);
   const [editingTracker, setEditingTracker] = useState<Tracker | null>(null);
@@ -229,7 +229,11 @@ export default function TodayScreen() {
           )}
         </View>
 
-        {trackers.length === 0 ? (
+        {isLoading ? (
+          <View style={styles.empty}>
+            <ActivityIndicator size="large" color={c.textSub} />
+          </View>
+        ) : trackers.length === 0 ? (
           <View style={styles.empty}>
             <Text style={styles.emptyText}>No trackers yet.</Text>
             <Text style={styles.emptySubtext}>Create a tracker to get started.</Text>
