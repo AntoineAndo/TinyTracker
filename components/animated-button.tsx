@@ -3,16 +3,18 @@ import { Animated, Pressable, PressableProps } from 'react-native';
 
 import { useAnimationsEnabled } from '@/hooks/use-animations-enabled';
 
-const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
-
 interface AnimatedButtonProps extends PressableProps {
-  /** Scale target on press-in. Defaults to 0.9. */
+  /** Scale target on press-in. Defaults to 0.95. */
   pressedScale?: number;
 }
 
 /**
  * A Pressable that springs down to `pressedScale` on press-in and bounces
  * back on press-out. Respects the global animations-enabled setting.
+ *
+ * The scale animation lives on a wrapping Animated.View so the Pressable
+ * receives its style prop directly — this supports both plain styles and
+ * the function-style `(state) => style` form that Pressable accepts.
  */
 export function AnimatedButton({
   style,
@@ -50,16 +52,10 @@ export function AnimatedButton({
   }
 
   return (
-    <AnimatedPressable
-      style={(state) => [
-        typeof style === 'function' ? style(state) : style,
-        { transform: [{ scale: scaleAnim }] },
-      ]}
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
-      {...rest}
-    >
-      {children}
-    </AnimatedPressable>
+    <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+      <Pressable style={style} onPressIn={handlePressIn} onPressOut={handlePressOut} {...rest}>
+        {children}
+      </Pressable>
+    </Animated.View>
   );
 }
