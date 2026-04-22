@@ -1,14 +1,17 @@
-import { useMemo, useState } from 'react';
+import { useRouter } from 'expo-router';
+import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { CharacterAvatar } from '@/components/character-avatar';
 import { EditEntryDrawer } from '@/components/edit-entry-drawer';
+import { RoutineCard } from '@/components/routine-card';
 import { isCompleted, TodayTrackerList, wouldComplete } from '@/components/today-tracker-list';
+import { useRoutines } from '@/context/routines-context';
 import { useSettings } from '@/context/settings-context';
 import { useTrackers } from '@/context/trackers-context';
 import { AppTheme, useTheme } from '@/hooks/use-theme';
 import { useCurrentDay } from '@/hooks/use-current-day';
-import { Entry, Tracker } from '@/lib/types';
+import { Entry, Routine, Tracker } from '@/lib/types';
 import { getLogicalDay, getStreak, nextDueDate, trackerInterval } from '@/lib/utils';
 
 function makeStyles(c: AppTheme) {
@@ -63,16 +66,33 @@ function dueLabel(daysUntil: number): string {
   return `In ${daysUntil} days`;
 }
 
+function isRoutineActive(routine: Routine): boolean {
+  const now = new Date();
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const startMinutes = routine.startHour * 60 + routine.startMinute;
+  const endMinutes = routine.endHour * 60 + routine.endMinute;
+  return nowMinutes >= startMinutes && nowMinutes < endMinutes;
+}
+
 export default function TodayScreen() {
   const { isLoading, trackers, entries, addEntry, updateEntry, completeEntry, deleteEntry } = useTrackers();
+  const { routines, isRoutineCompleted, markAllDone, currentPeriodEntryMap: routineEntryMap } = useRoutines();
   const { characterConfig } = useSettings();
   const [showAll, setShowAll] = useState(false);
   const [editingTracker, setEditingTracker] = useState<Tracker | null>(null);
   const [editingEntry, setEditingEntry] = useState<Entry | null>(null);
   const [exitingIds, setExitingIds] = useState<Set<string>>(new Set());
   const [pendingDismissIds, setPendingDismissIds] = useState<Set<string>>(new Set());
+  // Tick every 60s so routine card active/inactive state updates at window boundaries
+  const [, setTick] = useState(0);
+  const router = useRouter();
   const c = useTheme();
   const styles = useMemo(() => makeStyles(c), [c]);
+
+  useEffect(() => {
+    const interval = setInterval(() => setTick((n) => n + 1), 60000);
+    return () => clearInterval(interval);
+  }, []);
 
   const { today } = useCurrentDay();
 
@@ -154,6 +174,13 @@ export default function TodayScreen() {
 
   const allPending = trackers.filter((t) => !isCompleted(t, currentPeriodEntryMap[t.id]));
   const allDone = trackers.length > 0 && allPending.length === 0;
+
+  // Routines active on today's day of week (0=Monday…6=Sunday)
+  const todayDow = (today.getDay() + 6) % 7;
+  const activeRoutines = useMemo(
+    () => routines.filter((r) => r.days.includes(todayDow)),
+    [routines, todayDow],
+  );
 
   // Trackers completed within the current period — shown in a dedicated section at
   // the bottom when "Show completed" is toggled on, instead of inside their date groups.
@@ -245,6 +272,29 @@ export default function TodayScreen() {
           </View>
         ) : (
           <ScrollView>
+            {/* Routine cards — shown all day on active days, above tracker sections */}
+            {activeRoutines.length > 0 && (
+              <View style={{ paddingTop: 12 }}>
+                {activeRoutines.map((routine) => {
+                  const routineTrackers = routine.trackers
+                    .map((rt) => trackers.find((t) => t.id === rt.id))
+                    .filter((t): t is Tracker => !!t);
+                  return (
+                    <RoutineCard
+                      key={routine.id}
+                      routine={routine}
+                      trackers={routineTrackers}
+                      entryMap={routineEntryMap}
+                      isActive={isRoutineActive(routine)}
+                      isCompleted={isRoutineCompleted(routine)}
+                      onMarkAllDone={() => markAllDone(routine)}
+                      onPress={() => router.push(`/edit-routine/${routine.id}`)}
+                    />
+                  );
+                })}
+              </View>
+            )}
+
             {sortedDays.map((daysUntil) => {
               const sectionTrackers = groups[daysUntil] ?? [];
 

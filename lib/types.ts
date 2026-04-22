@@ -54,3 +54,26 @@ export interface ChunkMeta {
 }
 
 export type ChunkIndex = ChunkMeta[];
+
+export interface RoutineTracker {
+  id: string;
+  /** For count trackers only: how many completions satisfy this routine.
+   *  Defaults to the tracker's own target when absent. */
+  routineTarget?: number;
+}
+
+export interface Routine {
+  id: string;
+  name: string;
+  /** Ordered trackers belonging to this routine, with optional per-routine targets */
+  trackers: RoutineTracker[];
+  /** Active days of week: 0 = Monday … 6 = Sunday */
+  days: number[];
+  startHour: number;    // 0–23
+  startMinute: number;  // 0–59
+  endHour: number;      // 0–23
+  endMinute: number;    // 0–59
+  /** Send a reminder 30 min before end time when not all trackers are completed */
+  reminderEnabled: boolean;
+  createdAt: string;
+}

@@ -2,7 +2,8 @@ import { useEffect } from 'react';
 
 import { useSettings } from '@/context/settings-context';
 import { useTrackers } from '@/context/trackers-context';
-import type { Tracker } from '@/lib/types';
+import { useRoutines } from '@/context/routines-context';
+import type { Routine, Tracker } from '@/lib/types';
 
 // expo-notifications crashes on import in Expo Go (SDK 53+). Load it lazily so
 // the app still runs in Expo Go — notifications just won't fire.
@@ -250,4 +251,184 @@ export function useTrackerReminderScheduler() {
     syncTrackerReminders(trackers);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reminderKey]);
+}
+
+// ─── Routine reminders ────────────────────────────────────────────────────────
+
+function routineNotificationId(routineId: string, day: number): string {
+  return `routine-${routineId}-day-${day}`;
+}
+
+/** Returns the reminder time (30 min before end) or null if unschedulable (e.g. end < 00:30). */
+function routineReminderTime(endHour: number, endMinute: number): { hour: number; minute: number } | null {
+  let minute = endMinute - 30;
+  let hour = endHour;
+  if (minute < 0) {
+    minute += 60;
+    hour -= 1;
+  }
+  if (hour < 0) return null;
+  return { hour, minute };
+}
+
+/**
+ * Syncs all scheduled per-routine notifications. Mirrors syncTrackerReminders —
+ * cancels stale entries and schedules new weekly notifications for each
+ * (routine, day) pair where reminderEnabled is true.
+ */
+export async function syncRoutineReminders(routines: Routine[]): Promise<void> {
+  if (!Notifications) return;
+
+  const enabledRoutines = routines.filter((r) => r.reminderEnabled && r.days.length > 0);
+
+  if (enabledRoutines.length > 0) {
+    const { status } = await Notifications.requestPermissionsAsync();
+    if (status !== 'granted') return;
+  }
+
+  const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+  const scheduledById = new Map(scheduled.map((n) => [n.identifier, n]));
+
+  const expectedIds = new Set<string>();
+  for (const routine of enabledRoutines) {
+    for (const day of routine.days) {
+      expectedIds.add(routineNotificationId(routine.id, day));
+    }
+  }
+
+  // Cancel stale routine notifications
+  for (const notification of scheduled) {
+    if (
+      notification.identifier.startsWith('routine-') &&
+      !expectedIds.has(notification.identifier)
+    ) {
+      await Notifications.cancelScheduledNotificationAsync(notification.identifier);
+    }
+  }
+
+  // Schedule new or updated notifications
+  for (const routine of enabledRoutines) {
+    const reminderTime = routineReminderTime(routine.endHour, routine.endMinute);
+    if (!reminderTime) continue;
+
+    for (const day of routine.days) {
+      const id = routineNotificationId(routine.id, day);
+      const existing = scheduledById.get(id);
+
+      if (existing) {
+        const trigger = existing.trigger as { hour?: number; minute?: number };
+        // DATE triggers (one-shot skips) don't have hour/minute — always replace them
+        // with the correct weekly trigger so the schedule self-heals on app open.
+        if (trigger?.hour === reminderTime.hour && trigger?.minute === reminderTime.minute) continue;
+        await Notifications.cancelScheduledNotificationAsync(id);
+      }
+
+      await Notifications.scheduleNotificationAsync({
+        identifier: id,
+        content: {
+          title: routine.name,
+          body: `Your ${routine.name} ends soon — mark it done!`,
+          data: { routineId: routine.id, routineName: routine.name },
+          categoryIdentifier: 'tracker_reminder',
+        },
+        trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
+          weekday: toExpoWeekday(day),
+          hour: reminderTime.hour,
+          minute: reminderTime.minute,
+        },
+      });
+    }
+  }
+
+  const finalScheduled = await Notifications.getAllScheduledNotificationsAsync();
+  if (finalScheduled.length > 60) {
+    console.warn(
+      `[Notifications] ${finalScheduled.length} scheduled notifications — approaching iOS 64 limit`,
+    );
+  }
+}
+
+/**
+ * Cancels today's routine reminder by replacing the weekly trigger with a one-shot
+ * DATE trigger for next week's occurrence. On next app open, syncRoutineReminders
+ * detects the DATE trigger and restores the weekly schedule.
+ */
+export async function cancelRoutineNotificationForToday(
+  routineId: string,
+  routineDays: number[],
+  endHour: number,
+  endMinute: number,
+): Promise<void> {
+  if (!Notifications) return;
+
+  // app convention: 0 = Monday … 6 = Sunday
+  const todayDow = (new Date().getDay() + 6) % 7;
+  if (!routineDays.includes(todayDow)) return;
+
+  const reminderTime = routineReminderTime(endHour, endMinute);
+  if (!reminderTime) return;
+
+  const id = routineNotificationId(routineId, todayDow);
+  await Notifications.cancelScheduledNotificationAsync(id);
+
+  // Schedule a one-shot for next week at the same time. syncRoutineReminders will
+  // replace it with the weekly trigger the next time the app opens.
+  const nextWeek = new Date();
+  nextWeek.setDate(nextWeek.getDate() + 7);
+  nextWeek.setHours(reminderTime.hour, reminderTime.minute, 0, 0);
+
+  await Notifications.scheduleNotificationAsync({
+    identifier: id,
+    content: {
+      title: 'routine-resync',
+      body: '',
+      data: { routineId, _resync: true },
+      categoryIdentifier: 'tracker_reminder',
+    },
+    trigger: {
+      type: Notifications.SchedulableTriggerInputTypes.DATE,
+      date: nextWeek,
+    },
+  });
+}
+
+export function useRoutineReminderScheduler() {
+  const { routines, isRoutineCompleted } = useRoutines();
+
+  const reminderKey = JSON.stringify(
+    routines.map((r) => ({
+      id: r.id,
+      days: r.days,
+      endHour: r.endHour,
+      endMinute: r.endMinute,
+      reminderEnabled: r.reminderEnabled,
+    })),
+  );
+
+  // Re-sync weekly triggers when routine config changes
+  useEffect(() => {
+    if (!Notifications) return;
+    syncRoutineReminders(routines);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reminderKey]);
+
+  // Cancel today's notification when a routine becomes fully completed.
+  // completionKey changes whenever an enabled routine's completion status flips.
+  const completionKey = JSON.stringify(
+    routines
+      .filter((r) => r.reminderEnabled)
+      .map((r) => ({ id: r.id, done: isRoutineCompleted(r) })),
+  );
+
+  useEffect(() => {
+    if (!Notifications) return;
+    for (const routine of routines) {
+      if (!routine.reminderEnabled) continue;
+      if (isRoutineCompleted(routine)) {
+        cancelRoutineNotificationForToday(routine.id, routine.days, routine.endHour, routine.endMinute);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [completionKey]);
 }

@@ -1,11 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { ChunkIndex, ChunkMeta, Entry, Tracker } from './types';
+import { ChunkIndex, ChunkMeta, Entry, Routine, Tracker } from './types';
 import { fromDateString, getLogicalDay, getCurrentDay, toDateString } from './utils';
 
 // ── Keys ──────────────────────────────────────────────────────────────────────
 
 const TRACKERS_KEY = '@trackit/trackers';
+const ROUTINES_KEY = '@trackit/routines';
 const LEGACY_ENTRIES_KEY = '@trackit/entries';
 const INDEX_KEY = '@trackit/entries/index';
 const CHUNK_PREFIX = '@trackit/entries/';   // + chunk id, e.g. '@trackit/entries/chunk_1k3m2'
@@ -25,6 +26,21 @@ export async function getTrackers(): Promise<Tracker[]> {
 
 export async function saveTrackers(trackers: Tracker[]): Promise<void> {
   await AsyncStorage.setItem(TRACKERS_KEY, JSON.stringify(trackers));
+}
+
+// ── Routines ──────────────────────────────────────────────────────────────────
+
+export async function getRoutines(): Promise<Routine[]> {
+  try {
+    const raw = await AsyncStorage.getItem(ROUTINES_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function saveRoutines(routines: Routine[]): Promise<void> {
+  await AsyncStorage.setItem(ROUTINES_KEY, JSON.stringify(routines));
 }
 
 // ── Chunk index ───────────────────────────────────────────────────────────────
