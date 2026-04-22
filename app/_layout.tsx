@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import 'react-native-reanimated';
 
+import { RoutinesProvider } from '@/context/routines-context';
 import { SettingsProvider } from '@/context/settings-context';
 import { TrackersProvider, useTrackers } from '@/context/trackers-context';
 import { useAnimationsEnabled } from '@/hooks/use-animations-enabled';
@@ -15,6 +16,7 @@ import {
   scheduleRemindLater,
   scheduleTrackerRemindLater,
   useNotificationScheduler,
+  useRoutineReminderScheduler,
   useTrackerReminderScheduler,
 } from '@/hooks/use-notification-scheduler';
 
@@ -25,6 +27,12 @@ export const unstable_settings = {
 // Renders inside TrackersProvider so it can access useTrackers()
 function TrackerReminderSync() {
   useTrackerReminderScheduler();
+  return null;
+}
+
+// Renders inside RoutinesProvider so it can access useRoutines()
+function RoutineReminderSync() {
+  useRoutineReminderScheduler();
   return null;
 }
 
@@ -73,16 +81,21 @@ function RootLayoutNav() {
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <TrackersProvider>
-        <TrackerReminderSync />
-        <NotificationActionHandler />
-        <Stack screenOptions={{ animation: animationsEnabled ? undefined : 'none' }}>
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="new-tracker" options={{ title: 'New Tracker' }} />
-          <Stack.Screen name="tracker/[id]" options={{ title: '' }} />
-          <Stack.Screen name="edit-tracker/[id]" options={{ title: 'Edit Tracker' }} />
-          <Stack.Screen name="character-builder" options={{ title: 'Character' }} />
-        </Stack>
-        <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
+        <RoutinesProvider>
+          <TrackerReminderSync />
+          <RoutineReminderSync />
+          <NotificationActionHandler />
+          <Stack screenOptions={{ animation: animationsEnabled ? undefined : 'none' }}>
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen name="new-tracker" options={{ title: 'New Tracker' }} />
+            <Stack.Screen name="tracker/[id]" options={{ title: '' }} />
+            <Stack.Screen name="edit-tracker/[id]" options={{ title: 'Edit Tracker' }} />
+            <Stack.Screen name="character-builder" options={{ title: 'Character' }} />
+            <Stack.Screen name="new-routine" options={{ title: 'New Routine' }} />
+            <Stack.Screen name="edit-routine/[id]" options={{ title: 'Edit Routine' }} />
+          </Stack>
+          <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
+        </RoutinesProvider>
       </TrackersProvider>
     </ThemeProvider>
   );

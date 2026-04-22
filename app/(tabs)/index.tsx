@@ -1,14 +1,15 @@
 import { useRouter } from 'expo-router';
 import { useMemo } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { isCompleted } from '@/components/today-tracker-list';
+import { useRoutines } from '@/context/routines-context';
 import { useTrackers } from '@/context/trackers-context';
 import { useCurrentDay } from '@/hooks/use-current-day';
 import { AppTheme, useTheme } from '@/hooks/use-theme';
 import { getTrackerColorHex } from '@/lib/tracker-colors';
 import { getTrackerIcon } from '@/lib/tracker-icons';
-import { Entry, Tracker } from '@/lib/types';
+import { Entry, Routine, Tracker } from '@/lib/types';
 import { getLogicalDay, toNumericValue } from '@/lib/utils';
 
 function makeStyles(c: AppTheme) {
@@ -79,7 +80,66 @@ function makeStyles(c: AppTheme) {
     empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8 },
     emptyText: { fontSize: 18, fontWeight: '600', color: c.text },
     emptySubtext: { fontSize: 15, color: c.textSub },
+    sectionHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 16,
+      paddingTop: 20,
+      paddingBottom: 8,
+    },
+    sectionTitle: { fontSize: 13, fontWeight: '700', color: c.textSub, textTransform: 'uppercase', letterSpacing: 0.5 },
+    sectionAddBtn: {
+      width: 28, height: 28, borderRadius: 14,
+      backgroundColor: c.tint,
+      alignItems: 'center', justifyContent: 'center',
+    },
+    sectionAddBtnText: { color: '#fff', fontSize: 18, lineHeight: 22 },
+    routineRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: c.border,
+      gap: 10,
+    },
+    routineInfo: { flex: 1 },
+    routineName: { fontSize: 15, fontWeight: '600', color: c.text },
+    routineMeta: { fontSize: 12, color: c.textSub, marginTop: 2 },
+    routineChevron: { fontSize: 16, color: c.textSub },
+    divider: { height: StyleSheet.hairlineWidth, backgroundColor: c.border, marginTop: 8 },
   });
+}
+
+const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+function formatTime(hour: number, minute: number): string {
+  const period = hour >= 12 ? 'PM' : 'AM';
+  const h = hour % 12 || 12;
+  const m = minute.toString().padStart(2, '0');
+  return `${h}:${m} ${period}`;
+}
+
+function RoutineRow({ routine, onPress, styles }: {
+  routine: Routine;
+  onPress: () => void;
+  styles: ReturnType<typeof makeStyles>;
+}) {
+  const dayLabel = routine.days.length === 7
+    ? 'Every day'
+    : routine.days.map((d) => DAY_LABELS[d]).join(', ');
+  return (
+    <Pressable style={styles.routineRow} onPress={onPress}>
+      <View style={styles.routineInfo}>
+        <Text style={styles.routineName}>{routine.name}</Text>
+        <Text style={styles.routineMeta}>
+          {formatTime(routine.startHour, routine.startMinute)} – {formatTime(routine.endHour, routine.endMinute)} · {dayLabel}
+        </Text>
+      </View>
+      <Text style={styles.routineChevron}>›</Text>
+    </Pressable>
+  );
 }
 
 function TrackerCard({ tracker, todayEntry, onPress, styles }: {
@@ -118,6 +178,7 @@ function TrackerCard({ tracker, todayEntry, onPress, styles }: {
 
 export default function TrackersScreen() {
   const { trackers, entries, mockMode, setMockMode } = useTrackers();
+  const { routines } = useRoutines();
   const { today } = useCurrentDay();
   const todayStr = today.toDateString();
   const router = useRouter();
@@ -144,31 +205,61 @@ export default function TrackersScreen() {
         </View>
       </View>
 
-      {trackers.length === 0 ? (
-        <View style={styles.empty}>
-          <Text style={styles.emptyText}>No trackers yet.</Text>
-          <Text style={styles.emptySubtext}>Tap + to create your first tracker.</Text>
+      <ScrollView>
+        {/* Routines section */}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Routines</Text>
+          {!mockMode && (
+            <Pressable style={styles.sectionAddBtn} onPress={() => router.push('/new-routine')}>
+              <Text style={styles.sectionAddBtnText}>+</Text>
+            </Pressable>
+          )}
         </View>
-      ) : (
-        <FlatList
-          data={trackers}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => {
-            const todayEntry = entries.find(
-              (e) => e.trackerId === item.id && getLogicalDay(new Date(e.createdAt), e.dayStartHour ?? 0).toDateString() === todayStr
-            );
-            return (
-              <TrackerCard
-                tracker={item}
-                todayEntry={todayEntry}
-                onPress={() => router.push(`/tracker/${item.id}`)}
-                styles={styles}
-              />
-            );
-          }}
-          contentContainerStyle={styles.list}
-        />
-      )}
+        {routines.length === 0 ? (
+          <Text style={[styles.emptySubtext, { paddingHorizontal: 16, paddingBottom: 8 }]}>
+            No routines yet. Tap + to group trackers into a routine.
+          </Text>
+        ) : (
+          routines.map((routine) => (
+            <RoutineRow
+              key={routine.id}
+              routine={routine}
+              onPress={() => router.push(`/edit-routine/${routine.id}`)}
+              styles={styles}
+            />
+          ))
+        )}
+
+        <View style={styles.divider} />
+
+        {/* Trackers section */}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>All Trackers</Text>
+        </View>
+        {trackers.length === 0 ? (
+          <View style={[styles.empty, { paddingVertical: 40 }]}>
+            <Text style={styles.emptyText}>No trackers yet.</Text>
+            <Text style={styles.emptySubtext}>Tap + to create your first tracker.</Text>
+          </View>
+        ) : (
+          <View style={styles.list}>
+            {trackers.map((item) => {
+              const todayEntry = entries.find(
+                (e) => e.trackerId === item.id && getLogicalDay(new Date(e.createdAt), e.dayStartHour ?? 0).toDateString() === todayStr,
+              );
+              return (
+                <TrackerCard
+                  key={item.id}
+                  tracker={item}
+                  todayEntry={todayEntry}
+                  onPress={() => router.push(`/tracker/${item.id}`)}
+                  styles={styles}
+                />
+              );
+            })}
+          </View>
+        )}
+      </ScrollView>
     </View>
   );
 }
