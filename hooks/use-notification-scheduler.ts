@@ -18,6 +18,7 @@ function getNotifications() {
 export const Notifications = getNotifications();
 
 export const REMIND_LATER_ACTION = 'remind_later';
+export const DONE_ACTION = 'done';
 
 if (Notifications) {
   Notifications.setNotificationHandler({
@@ -29,7 +30,21 @@ if (Notifications) {
       shouldSetBadge: false,
     }),
   });
+  // Generic tracker reminder — only has "Remind me later"
   Notifications.setNotificationCategoryAsync('tracker_reminder', [
+    {
+      identifier: REMIND_LATER_ACTION,
+      buttonTitle: 'Remind me later',
+      options: { opensAppToForeground: false },
+    },
+  ]);
+  // Boolean goal tracker reminder — adds a "Done" action that dismisses without opening the app
+  Notifications.setNotificationCategoryAsync('boolean_goal_reminder', [
+    {
+      identifier: DONE_ACTION,
+      buttonTitle: 'Done',
+      options: { opensAppToForeground: false },
+    },
     {
       identifier: REMIND_LATER_ACTION,
       buttonTitle: 'Remind me later',
@@ -171,13 +186,18 @@ export async function syncTrackerReminders(trackers: Tracker[]): Promise<void> {
         await Notifications.cancelScheduledNotificationAsync(id);
       }
 
+      // Boolean goal trackers get a "Done" action so the user can log directly from the notification
+      const categoryIdentifier = tracker.type === 'boolean' && tracker.orientation !== 'neutral'
+        ? 'boolean_goal_reminder'
+        : 'tracker_reminder';
+
       await Notifications.scheduleNotificationAsync({
         identifier: id,
         content: {
           title: tracker.name,
           body: `Time to log your ${tracker.name}`,
           data: { trackerId: tracker.id, trackerName: tracker.name },
-          categoryIdentifier: 'tracker_reminder',
+          categoryIdentifier,
         },
         trigger: {
           type: Notifications.SchedulableTriggerInputTypes.WEEKLY,

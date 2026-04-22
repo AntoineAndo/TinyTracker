@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { EditEntryDrawer } from '@/components/edit-entry-drawer';
@@ -256,9 +257,9 @@ export default function GraphScreen() {
     }
   }
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: false }), 50);
-  }, []);
+  }, []));
 
   if (trackers.length === 0) {
     return (
