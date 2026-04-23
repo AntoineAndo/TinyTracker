@@ -1,56 +1,97 @@
-import { useState } from 'react';
-import { Pressable, Text, TextInput, View } from 'react-native';
+// Quick-action controls rendered on the right side of each tracker row.
+import { useMemo, useState } from 'react';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
 
 import { AnimatedButton } from '@/components/animated-button';
-import { useTheme } from '@/hooks/use-theme';
+import { AppTheme, useTheme } from '@/hooks/use-theme';
 import { getTrackerColorHex } from '@/lib/tracker-colors';
+import { isCheckboxControl, isCompleted, wouldComplete } from '@/lib/tracker-utils';
 import { Entry, Tracker } from '@/lib/types';
 import { toNumericValue } from '@/lib/utils';
 
-import type { TodayTrackerListStyles } from './today-tracker-list-styles';
+export { isCompleted, wouldComplete };
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// Checkbox dimensions shared between the style and the SVG icon.
+const CHECKBOX_SIZE = 34;
+const CHECKBOX_RADIUS = 9;
+const CHECKBOX_ICON_SIZE = 18;
 
-export function isCompleted(tracker: Tracker, entry: Entry | undefined): boolean {
-  if (!entry) return false;
-  if (tracker.type === 'log') return entry.completed === true;
-  const val = toNumericValue(entry.value);
-  // Neutral boolean: any logged answer (Yes or No) counts as completed for the day.
-  if (tracker.type === 'boolean') return tracker.orientation === 'neutral' ? true : val === 1;
-  if (tracker.type === 'count') return val >= (tracker.target ?? 1);
-  // Range trackers are considered completed as soon as any value is saved.
-  return true;
+function makeStyles(c: AppTheme) {
+  return StyleSheet.create({
+    boolBtn: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 10, borderWidth: 1.5, borderColor: c.border },
+    boolBtnText: { fontSize: 14, fontWeight: '600', color: c.textSub },
+    boolBtnTextActive: { color: '#fff' },
+    countRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+    countProgress: { fontSize: 14, fontWeight: '600', color: c.textSub },
+    countBtn: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 10 },
+    countBtnText: { fontSize: 14, fontWeight: '700', color: '#fff' },
+    rangeRow: { flexDirection: 'row', gap: 4 },
+    rangeBtn: { width: 32, height: 32, borderRadius: 8, borderWidth: 1.5, borderColor: c.border, alignItems: 'center', justifyContent: 'center' },
+    rangeBtnText: { fontSize: 13, fontWeight: '600', color: c.textSub },
+    rangeBtnTextActive: { color: '#fff' },
+    logRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    logTotal: { fontSize: 14, fontWeight: '600', color: c.textSub, minWidth: 36, textAlign: 'right' },
+    logAddBtn: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10, borderWidth: 1.5 },
+    logAddBtnText: { fontSize: 14, fontWeight: '600' },
+    logDoneBtn: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10 },
+    logDoneBtnText: { fontSize: 14, fontWeight: '700', color: '#fff' },
+    logInputRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    logInput: {
+      width: 80, paddingVertical: 6, paddingHorizontal: 10,
+      borderWidth: 1.5, borderRadius: 10,
+      fontSize: 14, textAlign: 'right',
+      color: c.text, backgroundColor: c.surface,
+    },
+    logConfirmBtn: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+    logConfirmBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+    completedValue: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+    completedCheck: { fontSize: 15, fontWeight: '700' },
+    completedLabel: { fontSize: 15, fontWeight: '600' },
+    checkboxBtn: {
+      width: CHECKBOX_SIZE, height: CHECKBOX_SIZE, borderRadius: CHECKBOX_RADIUS,
+      alignItems: 'center', justifyContent: 'center',
+    },
+    checkboxIdle: { borderWidth: 1.5, borderColor: c.border },
+  });
 }
 
-export function wouldComplete(tracker: Tracker, value: number): boolean {
-  if (tracker.type === 'log') return false;
-  // Neutral boolean: both Yes (1) and No (0) complete the tracker.
-  if (tracker.type === 'boolean') return tracker.orientation === 'neutral' ? true : value === 1;
-  if (tracker.type === 'count') return value >= (tracker.target ?? 1);
-  // Range trackers complete on any value selection.
-  return true;
+// ── CheckboxControl ───────────────────────────────────────────────────────────
+
+// Shared checkbox shape used for boolean-goal and count-target-1 trackers.
+function CheckboxControl({ checked, colorHex, onPress }: { checked: boolean; colorHex: string; onPress: () => void }) {
+  const c = useTheme();
+  const styles = useMemo(() => makeStyles(c), [c]);
+  return (
+    <Pressable
+      style={[styles.checkboxBtn, checked ? { backgroundColor: colorHex } : styles.checkboxIdle]}
+      onPress={onPress}
+    >
+      {checked && (
+        <Svg width={CHECKBOX_ICON_SIZE} height={CHECKBOX_ICON_SIZE} viewBox="0 0 18 18" fill="none">
+          <Path d="M3.5 9.5L7.5 13L14.5 5.5" stroke="#fff" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round" />
+        </Svg>
+      )}
+    </Pressable>
+  );
 }
 
 // ── CompletedValue ────────────────────────────────────────────────────────────
 
-/** Displays the recorded value for a tracker that has already been completed today. */
-export function CompletedValue({ tracker, entry, styles }: {
-  tracker: Tracker;
-  entry: Entry;
-  styles: TodayTrackerListStyles;
-}) {
+export function CompletedValue({ tracker, entry, routineTarget }: { tracker: Tracker; entry: Entry; routineTarget?: number }) {
+  const c = useTheme();
+  const styles = useMemo(() => makeStyles(c), [c]);
   const colorHex = getTrackerColorHex(tracker.color);
   const val = toNumericValue(entry.value);
 
   let label = '';
   if (tracker.type === 'boolean') {
-    // Neutral boolean: show the actual answer recorded (Yes/No).
-    // Goal boolean: always shows "Done" since there's only one positive state.
     label = tracker.orientation === 'neutral' ? (val === 1 ? 'Yes' : 'No') : 'Done';
   } else if (tracker.type === 'count') {
-    label = `${val} / ${tracker.target ?? 1}`;
+    // Checkbox-shaped count trackers (target === 1) never reach here — TrackerEntryRow
+    // keeps QuickAction mounted for them so the checked checkbox is their done state.
+    label = `${val} / ${routineTarget ?? tracker.target ?? 1}`;
   } else {
-    // log and range: display the raw numeric value.
     label = String(val);
   }
 
@@ -64,23 +105,18 @@ export function CompletedValue({ tracker, entry, styles }: {
 
 // ── LogQuickAction ────────────────────────────────────────────────────────────
 
-/**
- * Action widget for 'log' trackers.
- * The user taps "+ Add" to open an inline input and accumulate a running total,
- * then taps "Done" to explicitly close the tracker for the day.
- */
-function LogQuickAction({ tracker, entry, onSave, onComplete, styles }: {
+function LogQuickAction({ tracker, entry, onSave, onComplete }: {
   tracker: Tracker;
   entry: Entry | undefined;
   onSave: (amount: number) => void;
   onComplete: () => void;
-  styles: TodayTrackerListStyles;
 }) {
+  const c = useTheme();
+  const styles = useMemo(() => makeStyles(c), [c]);
   const colorHex = getTrackerColorHex(tracker.color);
   const currentTotal = entry ? (entry.value as number) : 0;
   const [adding, setAdding] = useState(false);
   const [inputVal, setInputVal] = useState('');
-  const c = useTheme();
 
   function confirmAdd() {
     const amount = parseFloat(inputVal);
@@ -89,7 +125,6 @@ function LogQuickAction({ tracker, entry, onSave, onComplete, styles }: {
     setAdding(false);
   }
 
-  // Inline input mode: shown while the user is entering a value to add.
   if (adding) {
     return (
       <View style={styles.logInputRow}>
@@ -113,17 +148,12 @@ function LogQuickAction({ tracker, entry, onSave, onComplete, styles }: {
 
   return (
     <View style={styles.logRow}>
-      {/* Running total — hidden until the first value is added to avoid visual clutter. */}
-      {currentTotal > 0 && (
-        <Text style={styles.logTotal}>{currentTotal}</Text>
-      )}
+      {currentTotal > 0 && <Text style={styles.logTotal}>{currentTotal}</Text>}
       <AnimatedButton
         style={[styles.logAddBtn, { borderColor: colorHex }]}
         onPress={() => setAdding(true)}>
         <Text style={[styles.logAddBtnText, { color: colorHex }]}>+ Add</Text>
       </AnimatedButton>
-      {/* "Done" closes the tracker for the day; separate from adding values
-          so the user can log multiple increments before marking it complete. */}
       <Pressable style={[styles.logDoneBtn, { backgroundColor: colorHex }]} onPress={onComplete}>
         <Text style={styles.logDoneBtnText}>Done</Text>
       </Pressable>
@@ -133,60 +163,48 @@ function LogQuickAction({ tracker, entry, onSave, onComplete, styles }: {
 
 // ── QuickAction ───────────────────────────────────────────────────────────────
 
-/**
- * The primary action widget rendered in each tracker row before the entry is logged.
- * Delegates to a type-specific layout for each tracker type.
- */
-export function QuickAction({ tracker, entry, onSave, onComplete, styles }: {
+export function QuickAction({ tracker, entry, onSave, onComplete, routineTarget }: {
   tracker: Tracker;
   entry: Entry | undefined;
   onSave: (value: number) => void;
   onComplete: () => void;
-  styles: TodayTrackerListStyles;
+  routineTarget?: number;
 }) {
+  const c = useTheme();
+  const styles = useMemo(() => makeStyles(c), [c]);
   const colorHex = getTrackerColorHex(tracker.color);
-  const target = tracker.target ?? 1;
+  const target = routineTarget ?? tracker.target ?? 1;
   const currentVal = entry ? toNumericValue(entry.value) : 0;
 
-  // Log trackers have their own compound widget (running total + inline input + Done).
   if (tracker.type === 'log') {
-    return <LogQuickAction tracker={tracker} entry={entry} onSave={onSave} onComplete={onComplete} styles={styles} />;
+    return <LogQuickAction tracker={tracker} entry={entry} onSave={onSave} onComplete={onComplete} />;
   }
 
-  if (tracker.type === 'boolean') {
-    // Neutral boolean: two-button Yes / No toggle.
-    // "No" only highlights when an entry already exists with value 0,
-    // preventing the button from appearing pre-selected before the user logs anything.
-    if (tracker.orientation === 'neutral') {
-      return (
-        <View style={styles.countRow}>
-          <Pressable
-            style={[styles.boolBtn, { borderColor: colorHex }, currentVal === 1 && { backgroundColor: colorHex }]}
-            onPress={() => onSave(1)}>
-            <Text style={[styles.boolBtnText, currentVal === 1 && styles.boolBtnTextActive]}>Yes</Text>
-          </Pressable>
-          <Pressable
-            style={[styles.boolBtn, { borderColor: colorHex }, currentVal === 0 && entry && { backgroundColor: colorHex }]}
-            onPress={() => onSave(0)}>
-            <Text style={[styles.boolBtnText, currentVal === 0 && entry && styles.boolBtnTextActive]}>No</Text>
-          </Pressable>
-        </View>
-      );
-    }
+  // Checkbox shape: boolean-goal trackers and count trackers with target === 1.
+  if (isCheckboxControl(tracker, routineTarget)) {
+    return <CheckboxControl checked={currentVal >= 1} colorHex={colorHex} onPress={() => onSave(1)} />;
+  }
 
-    // Goal boolean: single "Done" button — only one meaningful state to record.
+  // Neutral boolean — two pill buttons for Yes / No.
+  if (tracker.type === 'boolean') {
     return (
-      <Pressable
-        style={[styles.boolBtn, { borderColor: colorHex }, currentVal === 1 && { backgroundColor: colorHex }]}
-        onPress={() => onSave(1)}>
-        <Text style={[styles.boolBtnText, currentVal === 1 && styles.boolBtnTextActive]}>Done</Text>
-      </Pressable>
+      <View style={styles.countRow}>
+        <Pressable
+          style={[styles.boolBtn, { borderColor: colorHex }, currentVal === 1 && { backgroundColor: colorHex }]}
+          onPress={() => onSave(1)}>
+          <Text style={[styles.boolBtnText, currentVal === 1 && styles.boolBtnTextActive]}>Yes</Text>
+        </Pressable>
+        <Pressable
+          style={[styles.boolBtn, { borderColor: colorHex }, currentVal === 0 && entry && { backgroundColor: colorHex }]}
+          onPress={() => onSave(0)}>
+          <Text style={[styles.boolBtnText, currentVal === 0 && entry && styles.boolBtnTextActive]}>No</Text>
+        </Pressable>
+      </View>
     );
   }
 
+  // Count tracker with target > 1 — progress label + increment button.
   if (tracker.type === 'count') {
-    // Count tracker: shows progress toward the target and a +1 button.
-    // Capped at target so the user can't over-log.
     return (
       <View style={styles.countRow}>
         <Text style={styles.countProgress}>{currentVal}/{target}</Text>
@@ -199,7 +217,7 @@ export function QuickAction({ tracker, entry, onSave, onComplete, styles }: {
     );
   }
 
-  // Range tracker: 1–5 segmented buttons; tapping the active value again is a no-op.
+  // Range tracker — 1–5 pill buttons.
   return (
     <View style={styles.rangeRow}>
       {[1, 2, 3, 4, 5].map((v) => (

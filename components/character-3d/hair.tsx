@@ -1,10 +1,10 @@
+// Renders the character's hair mesh based on the selected style.
 import { useGLTF } from '@react-three/drei/native';
 import {
   BoxGeometry,
   DoubleSide,
   MeshToonMaterial,
   SphereGeometry,
-  Vector3,
 } from 'three';
 import { useEffect, useRef, useMemo } from 'react';
 import type { Mesh, Object3D } from 'three';
@@ -42,13 +42,9 @@ function ShortHair({ color }: { color: string }) {
 export function Hair({ style, color }: HairProps) {
   const material = useMemo(() => new MeshToonMaterial({ color }), [color]);
 
-  // Cap geometry shared by most styles
   const capGeo = useMemo(() => new SphereGeometry(1.06, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2), []);
   const sideGeoMedium = useMemo(() => new BoxGeometry(0.25, 0.6, 0.35), []);
   const sideGeoLong = useMemo(() => new BoxGeometry(0.28, 1.2, 0.3), []);
-
-  const curlyCapGeo = useMemo(() => new SphereGeometry(1.15, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2), []);
-  const curlyBumpGeo = useMemo(() => new SphereGeometry(0.22, 12, 12), []);
 
   if (style === 'bald') return null;
 
@@ -66,32 +62,12 @@ export function Hair({ style, color }: HairProps) {
     );
   }
 
-  if (style === 'long') {
-    return (
-      <group>
-        <mesh geometry={capGeo} material={material} />
-        <mesh geometry={sideGeoLong} material={material} position={[-1.05, -0.5, 0]} />
-        <mesh geometry={sideGeoLong} material={material} position={[1.05, -0.5, 0]} />
-      </group>
-    );
-  }
-
-  // Curly — bumpy cap + 6 bump spheres arranged around the crown
-  const bumpPositions: [number, number, number][] = [
-    [0, 1.25, 0],
-    [0.6, 1.05, 0.3],
-    [-0.6, 1.05, 0.3],
-    [0.6, 1.05, -0.3],
-    [-0.6, 1.05, -0.3],
-    [0, 1.0, -0.55],
-  ];
-
+  // Long — cap + extended side panels
   return (
     <group>
-      <mesh geometry={curlyCapGeo} material={material} />
-      {bumpPositions.map((pos, i) => (
-        <mesh key={i} geometry={curlyBumpGeo} material={material} position={new Vector3(...pos)} />
-      ))}
+      <mesh geometry={capGeo} material={material} />
+      <mesh geometry={sideGeoLong} material={material} position={[-1.05, -0.5, 0]} />
+      <mesh geometry={sideGeoLong} material={material} position={[1.05, -0.5, 0]} />
     </group>
   );
 }

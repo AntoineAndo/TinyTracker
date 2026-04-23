@@ -16,5 +16,13 @@ export const TRACKER_COLOR_ORDER: TrackerColor[] = [
 ];
 
 export function getTrackerColorHex(color: TrackerColor): string {
-  return TRACKER_COLORS[color]?.hex ?? '#3b82f6';
+  return TRACKER_COLORS[color].hex;
+}
+
+export function getTrackerColorRgba(color: TrackerColor, alpha: number): string {
+  const hex = getTrackerColorHex(color);
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
 }

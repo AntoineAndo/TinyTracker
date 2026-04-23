@@ -1,9 +1,10 @@
+import { randomUUID } from 'expo-crypto';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
-import { isCompleted } from '@/components/today-tracker-list-action';
 import { useTrackers } from '@/context/trackers-context';
 import { useCurrentDay } from '@/hooks/use-current-day';
 import { getRoutines, saveRoutines } from '@/lib/storage';
+import { isCompleted } from '@/lib/tracker-utils';
 import { Entry, Routine, RoutineTracker, Tracker } from '@/lib/types';
 import { getLogicalDay, trackerInterval } from '@/lib/utils';
 
@@ -36,8 +37,6 @@ export function RoutinesProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  // Mirrors the currentPeriodEntryMap logic from today.tsx so RoutinesContext
-  // can check completion without depending on the Today screen's local state.
   const todayMidnight = useMemo(() => {
     const d = new Date(today);
     d.setHours(0, 0, 0, 0);
@@ -75,7 +74,7 @@ export function RoutinesProvider({ children }: { children: React.ReactNode }) {
   // ── CRUD ─────────────────────────────────────────────────────────────────────
 
   const addRoutine = useCallback(async (data: Omit<Routine, 'id' | 'createdAt'>) => {
-    const routine: Routine = { ...data, id: Date.now().toString(), createdAt: new Date().toISOString() };
+    const routine: Routine = { ...data, id: randomUUID(), createdAt: new Date().toISOString() };
     const updated = [...routines, routine];
     setRoutines(updated);
     await saveRoutines(updated);
@@ -100,7 +99,7 @@ export function RoutinesProvider({ children }: { children: React.ReactNode }) {
       const tracker = trackers.find((t) => t.id === rt.id);
       // Stale ID (tracker deleted) — treat as done so it doesn't block the routine.
       if (!tracker) return true;
-      return isRoutineTrackerCompleted(rt, tracker, currentPeriodEntryMap[rt.id]);
+      return isCompleted(tracker, currentPeriodEntryMap[rt.id], rt.routineTarget);
     });
   }, [trackers, currentPeriodEntryMap]);
 
@@ -110,10 +109,8 @@ export function RoutinesProvider({ children }: { children: React.ReactNode }) {
       if (!tracker) continue;
 
       const existing = currentPeriodEntryMap[rt.id];
-      if (isRoutineTrackerCompleted(rt, tracker, existing)) continue;
+      if (isCompleted(tracker, existing, rt.routineTarget)) continue;
 
-      // Sequential awaits are intentional: addEntry captures realEntries in a
-      // closure, so parallel calls would each see stale state and clobber each other.
       if (tracker.type === 'log') {
         if (existing) {
           await completeEntry(existing.id);
@@ -149,23 +146,6 @@ export function useRoutines(): RoutinesContextValue {
   const ctx = useContext(RoutinesContext);
   if (!ctx) throw new Error('useRoutines must be used within RoutinesProvider');
   return ctx;
-}
-
-/**
- * Checks whether a routine member is satisfied for the current period.
- * For count trackers, uses routineTarget instead of the tracker's own target
- * when a per-routine override is set.
- */
-function isRoutineTrackerCompleted(rt: RoutineTracker, tracker: Tracker, entry: Entry | undefined): boolean {
-  if (!entry) return false;
-  if (tracker.type === 'log') return entry.completed === true;
-  if (tracker.type === 'boolean') return tracker.orientation === 'neutral' ? true : Number(entry.value) === 1;
-  if (tracker.type === 'count') {
-    const target = rt.routineTarget ?? tracker.target ?? 1;
-    return Number(entry.value) >= target;
-  }
-  // Range: any value completes
-  return true;
 }
 
 /** Returns the value to write when bulk-completing a tracker via "Mark all done". */
