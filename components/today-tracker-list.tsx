@@ -1,14 +1,12 @@
 import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Pressable, ScrollView, Text, View } from 'react-native';
+import { Animated, ScrollView, View } from 'react-native';
 
-import { StreakBadge } from '@/components/streak-badge';
+import { TrackerEntryRow } from '@/components/tracker-entry-row';
 import { useAnimationsEnabled } from '@/hooks/use-animations-enabled';
 import { useTheme } from '@/hooks/use-theme';
-import { getTrackerColorHex } from '@/lib/tracker-colors';
-import { getTrackerIcon } from '@/lib/tracker-icons';
 import { Entry, Tracker } from '@/lib/types';
 
-import { CompletedValue, isCompleted, QuickAction, wouldComplete } from './today-tracker-list-action';
+import { isCompleted, wouldComplete } from './today-tracker-list-action';
 import { makeTodayTrackerListStyles } from './today-tracker-list-styles';
 
 export { isCompleted, wouldComplete };
@@ -86,57 +84,6 @@ function AnimatedRow({ children, exiting, onExited, animationsEnabled, rebound }
   );
 }
 
-// ── TrackerRow ────────────────────────────────────────────────────────────────
-
-type RowStyles = ReturnType<typeof makeTodayTrackerListStyles>;
-
-function TrackerRow({ tracker, entry, streak, showCompleted, isPendingDismiss, onSave, onComplete, onEdit, styles }: {
-  tracker: Tracker;
-  entry: Entry | undefined;
-  streak: number;
-  showCompleted: boolean;
-  isPendingDismiss: boolean;
-  onSave: (value: number) => void;
-  onComplete: () => void;
-  onEdit?: () => void;
-  styles: RowStyles;
-}) {
-  const colorHex = getTrackerColorHex(tracker.color);
-  const done = isCompleted(tracker, entry) && !isPendingDismiss;
-
-  const rowContent = (
-    <>
-      <View style={[styles.colorStrip, { backgroundColor: colorHex }]} />
-      <Text style={styles.rowIcon}>{getTrackerIcon(tracker.icon)}</Text>
-      <View style={styles.rowNameContainer}>
-        <Text style={[styles.rowName, done && styles.rowNameDone]} numberOfLines={1}>{tracker.name}</Text>
-        <StreakBadge streak={streak} />
-      </View>
-      <View style={styles.rowAction}>
-        {done && showCompleted
-          ? <CompletedValue tracker={tracker} entry={entry!} styles={styles} />
-          : !done
-          ? <QuickAction tracker={tracker} entry={entry} onSave={onSave} onComplete={onComplete} styles={styles} />
-          : null}
-      </View>
-    </>
-  );
-
-  if (done && showCompleted && onEdit) {
-    return (
-      <Pressable style={[styles.row, styles.rowDone]} onPress={onEdit}>
-        {rowContent}
-      </Pressable>
-    );
-  }
-
-  return (
-    <View style={[styles.row, done && styles.rowDone]}>
-      {rowContent}
-    </View>
-  );
-}
-
 // ── TodayTrackerList ──────────────────────────────────────────────────────────
 
 type Props = {
@@ -144,8 +91,6 @@ type Props = {
   entryMap: Record<string, Entry>;
   streakMap: Record<string, number>;
   showCompleted: boolean;
-  // Completed non-daily trackers that are approaching their next due date and
-  // should remain visible in their date section (shown with completed styling).
   forcedCompletedIds?: Set<string>;
   exitingIds: Set<string>;
   pendingDismissIds: Set<string>;
@@ -170,9 +115,6 @@ export function TodayTrackerList({ trackers, entryMap, streakMap, showCompleted,
           !isCompleted(t, entryMap[t.id]) ||
           exitingIds.has(t.id) ||
           pendingDismissIds.has(t.id) ||
-          // Completed non-daily trackers in the second half of their period
-          // remain in the date section so the user knows the next due date is
-          // approaching (even though they already logged this period).
           forcedCompletedIds?.has(t.id),
       );
 
@@ -218,11 +160,8 @@ export function TodayTrackerList({ trackers, entryMap, streakMap, showCompleted,
           animationsEnabled={animationsEnabled}
           rebound={reboundMap[item.id]}
         >
-          <TrackerRow
+          <TrackerEntryRow
             tracker={item}
-            // Forced-completed trackers appear as fresh entries so they show action
-            // buttons rather than completed styling — the actual entry update still
-            // happens via handleSave/handleComplete which use currentPeriodEntryMap.
             entry={forcedCompletedIds?.has(item.id) ? undefined : entryMap[item.id]}
             streak={streakMap[item.id] ?? 0}
             showCompleted={showCompleted}
@@ -233,7 +172,7 @@ export function TodayTrackerList({ trackers, entryMap, streakMap, showCompleted,
               const entry = entryMap[item.id];
               if (entry) onEdit(item, entry);
             }}
-            styles={styles}
+            variant="card"
           />
           {index < displayList.length - 1 && <View style={styles.separator} />}
         </AnimatedRow>

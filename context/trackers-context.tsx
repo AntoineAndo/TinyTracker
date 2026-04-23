@@ -1,4 +1,5 @@
-import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { randomUUID } from 'expo-crypto';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 
 import { useSettings } from '@/context/settings-context';
 import { MOCK_ENTRIES, MOCK_TRACKERS } from '@/lib/mock-data';
@@ -46,6 +47,11 @@ export function TrackersProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [realTrackers, setRealTrackers] = useState<Tracker[]>([]);
   const [realEntries, setRealEntries] = useState<Entry[]>([]);
+  // Ref that always holds the latest realEntries so mutation callbacks that are
+  // called in sequence (e.g. markAllDone loop) see up-to-date state without
+  // needing to be recreated after each state update.
+  const realEntriesRef = useRef<Entry[]>([]);
+  realEntriesRef.current = realEntries;
   const [chunkIndex, setChunkIndex] = useState<ChunkIndex>([]);
   const [loadedChunkCount, setLoadedChunkCount] = useState(1);
   const [mockMode, setMockMode] = useState(false);
@@ -73,7 +79,7 @@ export function TrackersProvider({ children }: { children: React.ReactNode }) {
   // ── Tracker mutations ───────────────────────────────────────────────────────
 
   const addTracker = useCallback(async (data: Omit<Tracker, 'id' | 'createdAt'>) => {
-    const tracker: Tracker = { ...data, id: Date.now().toString(), createdAt: new Date().toISOString() };
+    const tracker: Tracker = { ...data, id: randomUUID(), createdAt: new Date().toISOString() };
     const updated = [...realTrackers, tracker];
     setRealTrackers(updated);
     await saveTrackers(updated);
@@ -126,47 +132,54 @@ export function TrackersProvider({ children }: { children: React.ReactNode }) {
 
     const entry: Entry = {
       ...data,
-      id: Date.now().toString(),
+      id: randomUUID(),
       createdAt: new Date().toISOString(),
       dayStartHour,
     };
 
-    const updated = [...realEntries, entry];
+    // Eagerly update the ref so back-to-back calls (e.g. markAllDone loop) see
+    // the latest entries without waiting for a re-render to refresh the closure.
+    const updated = [...realEntriesRef.current, entry];
+    realEntriesRef.current = updated;
     setRealEntries(updated);
     await saveLoadedEntries(currentIndex, updated, dayStartHour);
-  }, [realEntries, chunkIndex, dayStartHour]);
+  }, [chunkIndex, dayStartHour]);
 
   const addEntryForDate = useCallback(async (data: Omit<Entry, 'id' | 'createdAt' | 'dayStartHour'>, date: Date) => {
     const noon = new Date(date);
     noon.setHours(12, 0, 0, 0);
     const entry: Entry = {
       ...data,
-      id: Date.now().toString(),
+      id: randomUUID(),
       createdAt: noon.toISOString(),
       dayStartHour,
     };
-    const updated = [...realEntries, entry];
+    const updated = [...realEntriesRef.current, entry];
+    realEntriesRef.current = updated;
     setRealEntries(updated);
     await saveLoadedEntries(chunkIndex, updated, dayStartHour);
-  }, [realEntries, chunkIndex, dayStartHour]);
+  }, [chunkIndex, dayStartHour]);
 
   const updateEntry = useCallback(async (id: string, value: boolean | number) => {
-    const updated = realEntries.map((e) => e.id === id ? { ...e, value } : e);
+    const updated = realEntriesRef.current.map((e) => e.id === id ? { ...e, value } : e);
+    realEntriesRef.current = updated;
     setRealEntries(updated);
     await saveLoadedEntries(chunkIndex, updated, dayStartHour);
-  }, [realEntries, chunkIndex, dayStartHour]);
+  }, [chunkIndex, dayStartHour]);
 
   const completeEntry = useCallback(async (id: string) => {
-    const updated = realEntries.map((e) => e.id === id ? { ...e, completed: true } : e);
+    const updated = realEntriesRef.current.map((e) => e.id === id ? { ...e, completed: true } : e);
+    realEntriesRef.current = updated;
     setRealEntries(updated);
     await saveLoadedEntries(chunkIndex, updated, dayStartHour);
-  }, [realEntries, chunkIndex, dayStartHour]);
+  }, [chunkIndex, dayStartHour]);
 
   const deleteEntry = useCallback(async (id: string) => {
-    const updated = realEntries.filter((e) => e.id !== id);
+    const updated = realEntriesRef.current.filter((e) => e.id !== id);
+    realEntriesRef.current = updated;
     setRealEntries(updated);
     await saveLoadedEntries(chunkIndex, updated, dayStartHour);
-  }, [realEntries, chunkIndex, dayStartHour]);
+  }, [chunkIndex, dayStartHour]);
 
   // ── Load more ───────────────────────────────────────────────────────────────
 

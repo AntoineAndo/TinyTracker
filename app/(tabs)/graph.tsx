@@ -2,6 +2,7 @@ import { useFocusEffect } from 'expo-router';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { TAB_BAR_HEIGHT } from '@/components/custom-tab-bar';
 import { EditEntryDrawer } from '@/components/edit-entry-drawer';
 import { useTrackers } from '@/context/trackers-context';
 import { useCurrentDay } from '@/hooks/use-current-day';
@@ -112,7 +113,7 @@ function makeStyles(c: AppTheme) {
     nameDot: { width: 10, height: 10, borderRadius: 5, flexShrink: 0 },
     nameText: { fontSize: 13, fontWeight: '600', color: c.text, flexShrink: 1 },
     scrollArea: { flex: 1 },
-    scrollContent: { paddingHorizontal: 8 },
+    scrollContent: { paddingHorizontal: 8, paddingBottom: TAB_BAR_HEIGHT },
     dateHeader: { flexDirection: 'row', alignItems: 'flex-end', paddingBottom: 6 },
     dateCell: { alignItems: 'center', justifyContent: 'flex-end' },
     monthLabel: {
@@ -230,32 +231,46 @@ export default function GraphScreen() {
   const { today } = useCurrentDay();
   const [editing, setEditing] = useState<EditingState | null>(null);
 
-  const startDate = new Date(today);
-  startDate.setDate(startDate.getDate() - 29);
+  const startDate = useMemo(() => {
+    const d = new Date(today);
+    d.setDate(d.getDate() - 29);
+    return d;
+  }, [today]);
 
-  const days = generateDays(startDate, today);
+  const days = useMemo(() => generateDays(startDate, today), [startDate, today]);
 
-  const entryMap: Record<string, Record<string, Entry>> = {};
-  for (const entry of entries) {
-    if (!entryMap[entry.trackerId]) entryMap[entry.trackerId] = {};
-    entryMap[entry.trackerId][getLogicalDay(new Date(entry.createdAt), entry.dayStartHour ?? 0).toDateString()] = entry;
-  }
+  const entryMap = useMemo(() => {
+    const map: Record<string, Record<string, Entry>> = {};
+    for (const entry of entries) {
+      if (!map[entry.trackerId]) map[entry.trackerId] = {};
+      const dayStr = getLogicalDay(new Date(entry.createdAt), entry.dayStartHour ?? 0).toDateString();
+      // Keep the most recent entry for a given tracker+day (consistent with currentPeriodEntryMap).
+      const existing = map[entry.trackerId][dayStr];
+      if (!existing || entry.createdAt > existing.createdAt) {
+        map[entry.trackerId][dayStr] = entry;
+      }
+    }
+    return map;
+  }, [entries]);
 
   // Precompute min/max scale per log tracker across the 30-day window
-  const logScales: Record<string, { min: number; max: number }> = {};
-  for (const tracker of trackers) {
-    if (tracker.type !== 'log') continue;
-    const trackerEntries = entryMap[tracker.id] ?? {};
-    const values = days
-      .map((d) => trackerEntries[d.toDateString()])
-      .filter((e): e is Entry => !!e && (e.value as number) > 0)
-      .map((e) => e.value as number);
-    if (values.length === 0) {
-      logScales[tracker.id] = { min: 0, max: 1 };
-    } else {
-      logScales[tracker.id] = { min: Math.min(...values), max: Math.max(...values) };
+  const logScales = useMemo(() => {
+    const scales: Record<string, { min: number; max: number }> = {};
+    for (const tracker of trackers) {
+      if (tracker.type !== 'log') continue;
+      const trackerEntries = entryMap[tracker.id] ?? {};
+      const values = days
+        .map((d) => trackerEntries[d.toDateString()])
+        .filter((e): e is Entry => !!e && (e.value as number) > 0)
+        .map((e) => e.value as number);
+      if (values.length === 0) {
+        scales[tracker.id] = { min: 0, max: 1 };
+      } else {
+        scales[tracker.id] = { min: Math.min(...values), max: Math.max(...values) };
+      }
     }
-  }
+    return scales;
+  }, [trackers, entryMap, days]);
 
   useFocusEffect(useCallback(() => {
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: false }), 50);
@@ -303,7 +318,7 @@ export default function GraphScreen() {
                 const showMonth = i === 0 || (prevDay != null && day.getMonth() !== prevDay.getMonth());
                 const isToday = isSameDay(day, today);
                 return (
-                  <View key={i} style={[styles.dateCell, { width: CELL_STEP }]}>
+                  <View key={day.toISOString()} style={[styles.dateCell, { width: CELL_STEP }]}>
                     {showMonth && <Text style={styles.monthLabel}>{MONTHS[day.getMonth()]}</Text>}
                     <Text style={[styles.dayLabel, isToday && styles.dayLabelToday]}>
                       {DAYS[day.getDay()]}
@@ -317,11 +332,11 @@ export default function GraphScreen() {
               if (tracker.reminderFrequency === 'daily') {
                 return (
                   <View key={tracker.id} style={[styles.cellRow, { height: ROW_HEIGHT }]}>
-                    {days.map((day, i) => {
+                    {days.map((day) => {
                       const entry = entryMap[tracker.id]?.[day.toDateString()];
                       const isToday = isSameDay(day, today);
                       return (
-                        <View key={i} style={{ width: CELL_STEP, alignItems: 'flex-start', justifyContent: 'center', height: ROW_HEIGHT }}>
+                        <View key={day.toISOString()} style={{ width: CELL_STEP, alignItems: 'flex-start', justifyContent: 'center', height: ROW_HEIGHT }}>
                           <Cell
                             tracker={tracker}
                             entry={entry}
@@ -342,8 +357,8 @@ export default function GraphScreen() {
               const periodCells = computePeriodCells(tracker, days[0], days.length, entryMap);
               return (
                 <View key={tracker.id} style={[styles.cellRow, { height: ROW_HEIGHT }]}>
-                  {periodCells.map((cell, i) => (
-                    <View key={i} style={{ width: cell.widthDays * CELL_STEP, alignItems: 'flex-start', justifyContent: 'center', height: ROW_HEIGHT }}>
+                  {periodCells.map((cell) => (
+                    <View key={cell.periodStart.toISOString()} style={{ width: cell.widthDays * CELL_STEP, alignItems: 'flex-start', justifyContent: 'center', height: ROW_HEIGHT }}>
                       <Cell
                         tracker={tracker}
                         entry={cell.entry}

@@ -1,46 +1,44 @@
-import { useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Animated, Easing, ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+
+import { Defs, Ellipse, RadialGradient, Stop, Svg } from 'react-native-svg';
 
 import { CharacterAvatar } from '@/components/character-avatar';
 import { EditEntryDrawer } from '@/components/edit-entry-drawer';
-import { RoutineCard } from '@/components/routine-card';
+import { TAB_BAR_HEIGHT } from '@/components/custom-tab-bar';
 import { isCompleted, TodayTrackerList, wouldComplete } from '@/components/today-tracker-list';
+import { TodayRoutineList } from '@/components/today-routine-list';
 import { useRoutines } from '@/context/routines-context';
 import { useSettings } from '@/context/settings-context';
 import { useTrackers } from '@/context/trackers-context';
+import { useAnimationsEnabled } from '@/hooks/use-animations-enabled';
 import { AppTheme, useTheme } from '@/hooks/use-theme';
 import { useCurrentDay } from '@/hooks/use-current-day';
-import { Entry, Routine, Tracker } from '@/lib/types';
-import { getLogicalDay, getStreak, nextDueDate, trackerInterval } from '@/lib/utils';
+import { DAY_NAMES_JS } from '@/lib/dates';
+import { COMPLETION_CELEBRATION_MS } from '@/lib/tracker-utils';
+import { Entry, Tracker } from '@/lib/types';
+import { getStreak, nextDueDate, trackerInterval } from '@/lib/utils';
 
 function makeStyles(c: AppTheme) {
   return StyleSheet.create({
-    container: { flex: 1, backgroundColor: c.surface },
-    topSection: {
-      flex: 1,
-      alignItems: 'center',
-      justifyContent: 'center',
-      paddingTop: 50,
-    },
-    bottomSection: {
-      flex: 2,
-      backgroundColor: c.background,
-      borderTopLeftRadius: 28,
-      borderTopRightRadius: 28,
-      overflow: 'hidden',
-    },
-    bottomHeader: {
+    container: { flex: 1, backgroundColor: c.background },
+    // Inline header: date label + greeting on the left, avatar on the right
+    header: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingHorizontal: 20,
-      paddingTop: 20,
-      paddingBottom: 12,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: c.border,
+      paddingTop: 60,
+      paddingBottom: 20,
     },
-    title: { fontSize: 22, fontWeight: '700', color: c.text },
+    headerLeft: { flex: 1, paddingRight: 12 },
+    avatarWrapper: { alignItems: 'center' },
+    avatarShadow: { marginTop: -18 },
+    dateLabel: {
+      fontSize: 12, fontWeight: '700', color: c.textSub,
+      textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4,
+    },
+    greeting: { fontSize: 30, fontWeight: '400', color: c.text, lineHeight: 34 },
     toggle: {
       paddingHorizontal: 14, paddingVertical: 7,
       borderRadius: 20, borderWidth: 1.5, borderColor: c.border,
@@ -48,7 +46,17 @@ function makeStyles(c: AppTheme) {
     toggleActive: { backgroundColor: c.toggleActiveBg, borderColor: c.toggleActiveBg },
     toggleText: { fontSize: 14, fontWeight: '600', color: c.textSub },
     toggleTextActive: { color: c.toggleActiveText },
-    empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8, padding: 32 },
+    completedRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 20,
+      paddingTop: 20,
+      paddingBottom: 4,
+    },
+    completedLabel: { fontSize: 13, fontWeight: '700', color: c.textSub, textTransform: 'uppercase', letterSpacing: 0.4 },
+    completedToggleText: { fontSize: 14, fontWeight: '600', color: c.text },
+    empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8, padding: 32, paddingTop: 60 },
     emptyText: { fontSize: 18, fontWeight: '600', color: c.text },
     allDoneText: { fontSize: 22, fontWeight: '700', color: '#22c55e' },
     emptySubtext: { fontSize: 15, color: c.textSub, textAlign: 'center' },
@@ -57,6 +65,7 @@ function makeStyles(c: AppTheme) {
       textTransform: 'uppercase', letterSpacing: 0.5,
       paddingHorizontal: 16, paddingTop: 20, paddingBottom: 4,
     },
+    loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   });
 }
 
@@ -66,33 +75,68 @@ function dueLabel(daysUntil: number): string {
   return `In ${daysUntil} days`;
 }
 
-function isRoutineActive(routine: Routine): boolean {
-  const now = new Date();
-  const nowMinutes = now.getHours() * 60 + now.getMinutes();
-  const startMinutes = routine.startHour * 60 + routine.startMinute;
-  const endMinutes = routine.endHour * 60 + routine.endMinute;
-  return nowMinutes >= startMinutes && nowMinutes < endMinutes;
-}
-
 export default function TodayScreen() {
   const { isLoading, trackers, entries, addEntry, updateEntry, completeEntry, deleteEntry } = useTrackers();
-  const { routines, isRoutineCompleted, markAllDone, currentPeriodEntryMap: routineEntryMap } = useRoutines();
+  // currentPeriodEntryMap is still needed here for streak computation and the main tracker handlers.
+  const { currentPeriodEntryMap } = useRoutines();
   const { characterConfig } = useSettings();
   const [showAll, setShowAll] = useState(false);
   const [editingTracker, setEditingTracker] = useState<Tracker | null>(null);
   const [editingEntry, setEditingEntry] = useState<Entry | null>(null);
   const [exitingIds, setExitingIds] = useState<Set<string>>(new Set());
   const [pendingDismissIds, setPendingDismissIds] = useState<Set<string>>(new Set());
-  // Tick every 60s so routine card active/inactive state updates at window boundaries
+  // Ref that maps trackerId → pending dismiss timeout so each timer can be
+  // cancelled individually (e.g. on unmount or rapid double-tap).
+  const dismissTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  // Tick aligned to minute boundaries so routine active/inactive state updates
+  // exactly when a window opens or closes, not up to 59s late.
   const [, setTick] = useState(0);
-  const router = useRouter();
   const c = useTheme();
   const styles = useMemo(() => makeStyles(c), [c]);
+  const animationsEnabled = useAnimationsEnabled();
 
   useEffect(() => {
-    const interval = setInterval(() => setTick((n) => n + 1), 60000);
-    return () => clearInterval(interval);
+    const now = new Date();
+    const msUntilNextMinute = (60 - now.getSeconds()) * 1000 - now.getMilliseconds();
+    let interval: ReturnType<typeof setInterval>;
+    const timeout = setTimeout(() => {
+      setTick((n) => n + 1);
+      interval = setInterval(() => setTick((n) => n + 1), 60000);
+    }, msUntilNextMinute);
+    return () => {
+      clearTimeout(timeout);
+      clearInterval(interval);
+    };
   }, []);
+
+  // Clear all dismiss timers when the screen unmounts.
+  useEffect(() => {
+    const timers = dismissTimers.current;
+    return () => {
+      timers.forEach((t) => clearTimeout(t));
+    };
+  }, []);
+
+  // Floating avatar animation — slow sine-wave oscillation
+  const floatAnim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (!animationsEnabled) {
+      floatAnim.setValue(0);
+      return;
+    }
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(floatAnim, { toValue: 1, duration: 2200, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(floatAnim, { toValue: 0, duration: 2200, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [animationsEnabled, floatAnim]);
+
+  const avatarTranslateY = floatAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -7] });
+  const shadowOpacity = floatAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0.45] });
+  const shadowScaleX = floatAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0.72] });
 
   const { today } = useCurrentDay();
 
@@ -116,25 +160,6 @@ export default function TodayScreen() {
     }
     return map;
   }, [entries]);
-
-  const currentPeriodEntryMap = useMemo(() => {
-    const map: Record<string, Entry> = {};
-    for (const tracker of trackers) {
-      const interval = trackerInterval(tracker);
-      const cutoff = new Date(todayMidnight);
-      cutoff.setDate(cutoff.getDate() - interval + 1);
-      const trackerEntries = entriesByTracker[tracker.id] ?? [];
-      const periodEntry = trackerEntries
-        .filter((e) => {
-          const day = getLogicalDay(new Date(e.createdAt), e.dayStartHour ?? 0);
-          day.setHours(0, 0, 0, 0);
-          return day >= cutoff;
-        })
-        .sort((a, b) => (b.createdAt > a.createdAt ? 1 : -1))[0];
-      if (periodEntry) map[tracker.id] = periodEntry;
-    }
-    return map;
-  }, [trackers, entriesByTracker, todayMidnight]);
 
   const streakMap = useMemo(() => {
     const map: Record<string, number> = {};
@@ -175,13 +200,6 @@ export default function TodayScreen() {
   const allPending = trackers.filter((t) => !isCompleted(t, currentPeriodEntryMap[t.id]));
   const allDone = trackers.length > 0 && allPending.length === 0;
 
-  // Routines active on today's day of week (0=Monday…6=Sunday)
-  const todayDow = (today.getDay() + 6) % 7;
-  const activeRoutines = useMemo(
-    () => routines.filter((r) => r.days.includes(todayDow)),
-    [routines, todayDow],
-  );
-
   // Trackers completed within the current period — shown in a dedicated section at
   // the bottom when "Show completed" is toggled on, instead of inside their date groups.
   const completedTrackers = useMemo(
@@ -189,7 +207,21 @@ export default function TodayScreen() {
     [trackers, currentPeriodEntryMap],
   );
 
-  async function handleSave(tracker: Tracker, value: number) {
+  function scheduleDismiss(trackerId: string, delay: number) {
+    // Cancel any outstanding timer for the same tracker.
+    const existing = dismissTimers.current.get(trackerId);
+    if (existing) clearTimeout(existing);
+
+    setPendingDismissIds((prev) => new Set([...prev, trackerId]));
+    const timer = setTimeout(() => {
+      dismissTimers.current.delete(trackerId);
+      setPendingDismissIds((prev) => { const n = new Set(prev); n.delete(trackerId); return n; });
+      setExitingIds((prev) => new Set([...prev, trackerId]));
+    }, delay);
+    dismissTimers.current.set(trackerId, timer);
+  }
+
+  const handleSave = useCallback(async (tracker: Tracker, value: number) => {
     const existing = currentPeriodEntryMap[tracker.id];
 
     if (tracker.type === 'log') {
@@ -205,59 +237,63 @@ export default function TodayScreen() {
 
     const alreadyDone = isCompleted(tracker, existing);
     if (!alreadyDone && wouldComplete(tracker, value) && !showAll) {
-      const delay = (tracker.type === 'boolean' || tracker.type === 'count') && tracker.reminderFrequency === 'daily' ? 750 : 0;
-      setPendingDismissIds((prev) => new Set([...prev, tracker.id]));
-      setTimeout(() => {
-        setPendingDismissIds((prev) => { const n = new Set(prev); n.delete(tracker.id); return n; });
-        setExitingIds((prev) => new Set([...prev, tracker.id]));
-      }, delay);
+      const delay = (tracker.type === 'boolean' || tracker.type === 'count') && tracker.reminderFrequency === 'daily' ? COMPLETION_CELEBRATION_MS : 0;
+      scheduleDismiss(tracker.id, delay);
     }
     if (existing) {
       await updateEntry(existing.id, value);
     } else {
       await addEntry({ trackerId: tracker.id, value });
     }
-  }
+  }, [currentPeriodEntryMap, showAll, updateEntry, addEntry]);  
 
-  async function handleComplete(tracker: Tracker) {
+  const handleComplete = useCallback(async (tracker: Tracker) => {
     const existing = currentPeriodEntryMap[tracker.id];
     if (!showAll) {
-      const delay = (tracker.type === 'boolean' || tracker.type === 'count') && tracker.reminderFrequency === 'daily' ? 750 : 0;
-      setPendingDismissIds((prev) => new Set([...prev, tracker.id]));
-      setTimeout(() => {
-        setPendingDismissIds((prev) => { const n = new Set(prev); n.delete(tracker.id); return n; });
-        setExitingIds((prev) => new Set([...prev, tracker.id]));
-      }, delay);
+      const delay = (tracker.type === 'boolean' || tracker.type === 'count') && tracker.reminderFrequency === 'daily' ? COMPLETION_CELEBRATION_MS : 0;
+      scheduleDismiss(tracker.id, delay);
     }
     if (existing) {
       await completeEntry(existing.id);
     } else {
       await addEntry({ trackerId: tracker.id, value: 0, completed: true });
     }
-  }
+  }, [currentPeriodEntryMap, showAll, completeEntry, addEntry]);  
+
+  const hour = today.getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const dateLabel = `${DAY_NAMES_JS[today.getDay()]} · ${MONTH_NAMES[today.getMonth()]} ${today.getDate()}`;
 
   return (
     <View style={styles.container}>
-      {/* Top section — character */}
-      <View style={styles.topSection}>
-        <CharacterAvatar config={characterConfig} size={250} interactive />
-      </View>
-
-      {/* Bottom section — tracker list */}
-      <View style={styles.bottomSection}>
-        <View style={styles.bottomHeader}>
-          <Text style={styles.title}>Today</Text>
-          {trackers.length > 0 && (
-            <Pressable
-              style={[styles.toggle, showAll && styles.toggleActive]}
-              onPress={() => setShowAll((v) => !v)}>
-              <Text style={[styles.toggleText, showAll && styles.toggleTextActive]}>Show completed</Text>
-            </Pressable>
-          )}
+      <ScrollView contentContainerStyle={{ paddingBottom: TAB_BAR_HEIGHT }}>
+        {/* Inline header: date + greeting left, avatar right */}
+        <View style={styles.header}>
+          <View style={styles.headerLeft}>
+            <Text style={styles.dateLabel}>{dateLabel}</Text>
+            <Text style={styles.greeting}>{greeting}</Text>
+          </View>
+          <View style={styles.avatarWrapper}>
+            <Animated.View style={{ transform: [{ translateY: avatarTranslateY }] }}>
+              <CharacterAvatar config={characterConfig} size={110} interactive />
+            </Animated.View>
+            <Animated.View style={{ opacity: shadowOpacity, transform: [{ scaleX: shadowScaleX }] }}>
+              <Svg width={60} height={16} style={styles.avatarShadow}>
+                <Defs>
+                  <RadialGradient id="shadow" cx="50%" cy="50%" rx="50%" ry="50%">
+                    <Stop offset="0%" stopColor="#000" stopOpacity={0.12} />
+                    <Stop offset="100%" stopColor="#000" stopOpacity={0} />
+                  </RadialGradient>
+                </Defs>
+                <Ellipse cx={30} cy={8} rx={30} ry={8} fill="url(#shadow)" />
+              </Svg>
+            </Animated.View>
+          </View>
         </View>
 
         {isLoading ? (
-          <View style={styles.empty}>
+          <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={c.textSub} />
           </View>
         ) : trackers.length === 0 ? (
@@ -268,32 +304,12 @@ export default function TodayScreen() {
         ) : allDone && !showAll ? (
           <View style={styles.empty}>
             <Text style={styles.allDoneText}>All done for today!</Text>
-            <Text style={styles.emptySubtext}>Tap &quot;Show completed&quot; to review your entries.</Text>
+            <Text style={styles.emptySubtext}>Tap &ldquo;Show completed&rdquo; to review your entries.</Text>
           </View>
         ) : (
-          <ScrollView>
-            {/* Routine cards — shown all day on active days, above tracker sections */}
-            {activeRoutines.length > 0 && (
-              <View style={{ paddingTop: 12 }}>
-                {activeRoutines.map((routine) => {
-                  const routineTrackers = routine.trackers
-                    .map((rt) => trackers.find((t) => t.id === rt.id))
-                    .filter((t): t is Tracker => !!t);
-                  return (
-                    <RoutineCard
-                      key={routine.id}
-                      routine={routine}
-                      trackers={routineTrackers}
-                      entryMap={routineEntryMap}
-                      isActive={isRoutineActive(routine)}
-                      isCompleted={isRoutineCompleted(routine)}
-                      onMarkAllDone={() => markAllDone(routine)}
-                      onPress={() => router.push(`/edit-routine/${routine.id}`)}
-                    />
-                  );
-                })}
-              </View>
-            )}
+          <>
+            {/* Routine cards — shown all day on active days; component owns its context subscriptions */}
+            <TodayRoutineList today={today} />
 
             {sortedDays.map((daysUntil) => {
               const sectionTrackers = groups[daysUntil] ?? [];
@@ -350,28 +366,33 @@ export default function TodayScreen() {
                 </View>
               );
             })}
-
-            {/* Completed section — only visible when "Show completed" is toggled on */}
-            {showAll && completedTrackers.length > 0 && (
-              <View>
-                <Text style={styles.sectionLabel}>Completed</Text>
-                <TodayTrackerList
-                  trackers={completedTrackers}
-                  entryMap={currentPeriodEntryMap}
-                  streakMap={streakMap}
-                  showCompleted={true}
-                  exitingIds={new Set()}
-                  pendingDismissIds={new Set()}
-                  onSave={handleSave}
-                  onComplete={handleComplete}
-                  onEdit={(tracker, entry) => { setEditingTracker(tracker); setEditingEntry(entry); }}
-                  onExited={() => {}}
-                />
-              </View>
-            )}
-          </ScrollView>
+          </>
         )}
-      </View>
+
+        {/* Completed section toggle + list */}
+        {!isLoading && trackers.length > 0 && (
+          <View style={styles.completedRow}>
+            <Text style={styles.completedLabel}>{completedTrackers.length} completed</Text>
+            <Pressable onPress={() => setShowAll((v) => !v)}>
+              <Text style={styles.completedToggleText}>{showAll ? 'Hide' : 'Show'} →</Text>
+            </Pressable>
+          </View>
+        )}
+        {showAll && completedTrackers.length > 0 && (
+          <TodayTrackerList
+            trackers={completedTrackers}
+            entryMap={currentPeriodEntryMap}
+            streakMap={streakMap}
+            showCompleted={true}
+            exitingIds={new Set()}
+            pendingDismissIds={new Set()}
+            onSave={handleSave}
+            onComplete={handleComplete}
+            onEdit={(tracker, entry) => { setEditingTracker(tracker); setEditingEntry(entry); }}
+            onExited={() => {}}
+          />
+        )}
+      </ScrollView>
 
       {editingTracker && editingEntry && (
         <EditEntryDrawer

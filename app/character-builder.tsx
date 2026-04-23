@@ -16,7 +16,6 @@ const HAIR_STYLE_OPTIONS: { value: CharacterConfig['hairStyle']; label: string }
   { value: 'short', label: 'Short' },
   { value: 'medium', label: 'Medium' },
   { value: 'long', label: 'Long' },
-  { value: 'curly', label: 'Curly' },
 ];
 
 const GLASSES_OPTIONS: { value: CharacterConfig['glasses']; label: string }[] = [

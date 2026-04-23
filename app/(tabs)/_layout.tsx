@@ -1,50 +1,31 @@
 import { Tabs } from 'expo-router';
-import React from 'react';
+import React, { useState } from 'react';
 
-import { HapticTab } from '@/components/haptic-tab';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Colors } from '@/constants/theme';
-import { useAppColorScheme } from '@/hooks/use-app-color-scheme';
+import { CustomTabBar } from '@/components/custom-tab-bar';
+import { SettingsDrawer } from '@/components/settings-drawer';
 
 export default function TabLayout() {
-  const colorScheme = useAppColorScheme();
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   return (
-    <Tabs
-      initialRouteName="today"
-      screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
-        headerShown: false,
-        tabBarButton: HapticTab,
-      }}>
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Trackers',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="list.bullet" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="today"
-        options={{
-          title: 'Today',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="calendar" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="graph"
-        options={{
-          title: 'Graph',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="chart.bar.fill" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="settings"
-        options={{
-          title: 'Settings',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="gearshape.fill" color={color} />,
-        }}
-      />
-    </Tabs>
+    <>
+      <Tabs
+        initialRouteName="today"
+        screenOptions={{ headerShown: false }}
+        tabBar={(props) => (
+          <CustomTabBar
+            {...props}
+            onSettingsPress={() => setSettingsOpen(true)}
+            settingsActive={settingsOpen}
+          />
+        )}
+      >
+        <Tabs.Screen name="index" />
+        <Tabs.Screen name="today" />
+        <Tabs.Screen name="graph" />
+        <Tabs.Screen name="settings" options={{ href: null }} />
+      </Tabs>
+      <SettingsDrawer visible={settingsOpen} onClose={() => setSettingsOpen(false)} />
+    </>
   );
 }

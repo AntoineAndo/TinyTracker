@@ -4,7 +4,7 @@ import { CharacterScene } from './character-3d/scene';
 
 export interface CharacterConfig {
   skinColor: string;
-  hairStyle: 'bald' | 'short' | 'medium' | 'long' | 'curly';
+  hairStyle: 'bald' | 'short' | 'medium' | 'long';
   hairColor: string;
   glasses: 'none' | 'round' | 'rectangle';
   glassesColor: string;
@@ -54,7 +54,7 @@ export function isValidCharacterConfig(obj: unknown): obj is CharacterConfig {
   const c = obj as Record<string, unknown>;
   return (
     typeof c.skinColor === 'string' &&
-    ['bald', 'short', 'medium', 'long', 'curly'].includes(c.hairStyle as string) &&
+    ['bald', 'short', 'medium', 'long'].includes(c.hairStyle as string) &&
     typeof c.hairColor === 'string' &&
     ['none', 'round', 'rectangle'].includes(c.glasses as string) &&
     typeof c.glassesColor === 'string'
