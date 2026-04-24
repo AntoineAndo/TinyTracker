@@ -7,7 +7,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { TAB_BAR_HEIGHT } from '@/components/custom-tab-bar';
 import { isCompleted } from '@/components/today-tracker-list';
-import { Border, Radius, Shadow, Size, Space, Type, Weight } from '@/constants/tokens';
+import { Border, FontFamily, Radius, Shadow, Size, Space, Type, Weight } from '@/constants/tokens';
 import { useRoutines } from '@/context/routines-context';
 import { useTrackers } from '@/context/trackers-context';
 import { useCurrentDay } from '@/hooks/use-current-day';
@@ -32,7 +32,7 @@ function makeStyles(c: AppTheme) {
     headerLeft: { flex: 1 },
     screenLabel: { fontSize: 12, fontWeight: Weight.bold, color: c.textSub, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: Space.xs },
     title: { ...Type.display, color: c.text },
-    titleItalic: { fontStyle: 'italic' },
+    titleItalic: { fontFamily: FontFamily.displaySerifItalic },
     headerActions: { flexDirection: 'row', alignItems: 'center', gap: Space.base, paddingTop: Space.sm },
     mockToggle: {
       paddingHorizontal: Space.base,
@@ -56,7 +56,7 @@ function makeStyles(c: AppTheme) {
     // ── Stat chips ────────────────────────────────────────────
     statChipsRow: { flexDirection: 'row', gap: Space.base, paddingHorizontal: Space.lg, paddingBottom: Space.xl },
     statChip: { flex: 1, borderRadius: Radius.lg, padding: Space.base },
-    statChipNumber: { ...Type.display, lineHeight: 32 },
+    statChipNumber: { ...Type.display },
     statChipLabel: {
       ...Type.overline, letterSpacing: 0.4, marginTop: Space.xs, opacity: 0.65,
     },

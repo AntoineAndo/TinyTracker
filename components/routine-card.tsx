@@ -22,8 +22,8 @@ type RoutineCardProps = {
   onMarkAllDone: () => void;
   onSave: (tracker: Tracker, value: number) => void;
   onComplete: (tracker: Tracker) => void;
-  // Called when isDone is true and no row animations are in flight - parent should animate the card out
-  onAllDone?: () => void;
+  // Called with this routine's id when isDone is true and no row animations are in flight
+  onAllDone?: (routineId: string) => void;
 };
 
 // Pick an emoji based on the routine's start hour
@@ -106,9 +106,6 @@ export function RoutineCard({ routine, trackers, entryMap, isActive, isDone, onM
   const dismissTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const reboundVersionsRef = useRef<Record<string, number>>({});
   const prevExitingRef = useRef(new Set<string>());
-  // Tracks whether there was incomplete work this session; prevents onAllDone from
-  // firing on mount when the routine was already completed before the user opened the app.
-  const hadUndoneWork = useRef(!isDone);
 
   const visibleTrackers = useMemo(
     () => trackers.filter((t) => !hiddenIds.has(t.id)),
@@ -190,14 +187,12 @@ export function RoutineCard({ routine, trackers, entryMap, isActive, isDone, onM
     setHiddenIds((prev) => new Set([...prev, id]));
   }, []);
 
-  // Signal the parent to remove the card once all done and no row animation is in flight.
-  // Covers both paths: individual rows animated out and "Mark all done" pressed at once.
-  // hadUndoneWork guards against firing on mount when the routine was already completed.
+  // Signal the parent to remove the card once done and no row animation is in flight.
+  // Fires on mount too so already-completed routines animate out on app restart.
+  // Idempotency is guaranteed by the parent's handledRoutineIds ref.
   useEffect(() => {
-    if (!isDone) { hadUndoneWork.current = true; return; }
-    if (hadUndoneWork.current && pendingDismissIds.size === 0 && exitingIds.size === 0) {
-      hadUndoneWork.current = false;
-      onAllDone?.();
+    if (isDone && pendingDismissIds.size === 0 && exitingIds.size === 0) {
+      onAllDone?.(routine.id);
     }
   }, [isDone, pendingDismissIds.size, exitingIds.size, onAllDone]);
 

@@ -1,8 +1,13 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
+import { InstrumentSerif_400Regular, InstrumentSerif_400Regular_Italic, useFonts } from '@expo-google-fonts/instrument-serif';
 import { Stack, useRouter } from 'expo-router';
+import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
+
 import 'react-native-reanimated';
+
+SplashScreen.preventAutoHideAsync();
 
 import { RoutinesProvider } from '@/context/routines-context';
 import { SettingsProvider } from '@/context/settings-context';
@@ -59,7 +64,7 @@ function NotificationActionHandler() {
           scheduleRemindLater();
         }
       } else {
-        // Default tap — open the tracker detail or today screen
+        // Default tap: open the tracker detail or today screen
         if (data?.trackerId) {
           router.push(`/tracker/${data.trackerId}`);
         } else {
@@ -102,6 +107,14 @@ function RootLayoutNav() {
 }
 
 export default function RootLayout() {
+  const [fontsLoaded] = useFonts({ InstrumentSerif_400Regular, InstrumentSerif_400Regular_Italic });
+
+  useEffect(() => {
+    if (fontsLoaded) SplashScreen.hideAsync();
+  }, [fontsLoaded]);
+
+  if (!fontsLoaded) return null;
+
   return (
     <SettingsProvider>
       <RootLayoutNav />

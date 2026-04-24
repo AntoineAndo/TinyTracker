@@ -42,6 +42,9 @@ export function TodayRoutineList({ today }: TodayRoutineListProps) {
   const [exitingRoutineIds, setExitingRoutineIds] = useState<Set<string>>(new Set());
   const [hiddenRoutineIds, setHiddenRoutineIds] = useState<Set<string>>(new Set());
   const doneTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  // Tracks routines whose dismiss has already been scheduled, so rapid re-renders
+  // (or onAllDone firing on mount for already-done routines) don't double-schedule.
+  const handledRoutineIds = useRef<Set<string>>(new Set());
 
   // Reset card-level dismiss state on day change so completed routines reappear the next day
   const prevTodayDowRef = useRef(todayDow);
@@ -50,6 +53,7 @@ export function TodayRoutineList({ today }: TodayRoutineListProps) {
       prevTodayDowRef.current = todayDow;
       doneTimers.current.forEach(clearTimeout);
       doneTimers.current.clear();
+      handledRoutineIds.current.clear();
       setExitingRoutineIds(new Set());
       setHiddenRoutineIds(new Set());
     }
@@ -108,7 +112,8 @@ export function TodayRoutineList({ today }: TodayRoutineListProps) {
   }, [currentPeriodEntryMap, completeEntry, addEntry]);
 
   const handleRoutineAllDone = useCallback((routineId: string) => {
-    if (doneTimers.current.has(routineId)) return;
+    if (handledRoutineIds.current.has(routineId)) return;
+    handledRoutineIds.current.add(routineId);
     const timer = setTimeout(() => {
       doneTimers.current.delete(routineId);
       setExitingRoutineIds((prev) => new Set([...prev, routineId]));
@@ -117,6 +122,7 @@ export function TodayRoutineList({ today }: TodayRoutineListProps) {
   }, []);
 
   const handleRoutineExited = useCallback((routineId: string) => {
+    handledRoutineIds.current.delete(routineId);
     setExitingRoutineIds((prev) => { const n = new Set(prev); n.delete(routineId); return n; });
     setHiddenRoutineIds((prev) => new Set([...prev, routineId]));
   }, []);
@@ -147,7 +153,7 @@ export function TodayRoutineList({ today }: TodayRoutineListProps) {
               onMarkAllDone={() => markAllDone(routine)}
               onSave={handleSave}
               onComplete={handleComplete}
-              onAllDone={() => handleRoutineAllDone(routine.id)}
+              onAllDone={handleRoutineAllDone}
             />
           </AnimatedExitRow>
         );

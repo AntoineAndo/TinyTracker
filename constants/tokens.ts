@@ -1,6 +1,7 @@
 // Design tokens: non-themed, static style primitives used across the app.
 // Colors live in `hooks/use-theme.ts` (scheme-aware). Everything else here:
 // spacing, radii, borders, typography, shadows, fixed dimensions, motion.
+// FontFamily names must match the keys passed to useFonts() in app/_layout.tsx.
 // Always import from this file instead of hardcoding numeric literals.
 
 import type { TextStyle, ViewStyle } from 'react-native';
@@ -37,6 +38,13 @@ export const Border = {
   emphasis: 2,
 } as const;
 
+// Font families for display/heading text.
+// Regular: page titles, numbers. Italic: accent word in titles, user name in greeting.
+export const FontFamily = {
+  displaySerif:       'InstrumentSerif_400Regular',
+  displaySerifItalic: 'InstrumentSerif_400Regular_Italic',
+} as const;
+
 // Font weights. `medium` (500) is reserved for tertiary text (links,
 // secondary button labels, faint day labels) where semibold feels too heavy.
 export const Weight = {
@@ -52,7 +60,7 @@ export const Weight = {
 // (h2, bodyMd, label, fieldLabel, caption, overline) omit it because they
 // typically sit inside rows where the surrounding layout controls leading.
 export const Type = {
-  display:    { fontSize: 30, fontWeight: Weight.regular,  lineHeight: 34 },
+  display:    { fontSize: 34, fontWeight: Weight.regular,  lineHeight: 36, letterSpacing: -0.5, fontFamily: FontFamily.displaySerif },
   h1:         { fontSize: 22, fontWeight: Weight.bold,     lineHeight: 28 },
   h2:         { fontSize: 17, fontWeight: Weight.bold },
   body:       { fontSize: 16, fontWeight: Weight.semibold, lineHeight: 20 },

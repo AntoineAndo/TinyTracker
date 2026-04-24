@@ -22,6 +22,8 @@ interface SettingsContextValue {
   setGraphShowValues: (value: boolean) => void;
   characterConfig: CharacterConfig;
   setCharacterConfig: (value: CharacterConfig) => void;
+  userName: string;
+  setUserName: (value: string) => void;
 }
 
 const SettingsContext = createContext<SettingsContextValue>({
@@ -39,6 +41,8 @@ const SettingsContext = createContext<SettingsContextValue>({
   setGraphShowValues: () => {},
   characterConfig: DEFAULT_CHARACTER,
   setCharacterConfig: () => {},
+  userName: '',
+  setUserName: () => {},
 });
 
 const ANIMATIONS_KEY = '@settings/animations';
@@ -48,6 +52,7 @@ const REMINDER_ENABLED_KEY = '@settings/reminderEnabled';
 const REMINDER_HOUR_KEY = '@settings/reminderHour';
 const GRAPH_SHOW_VALUES_KEY = '@settings/graphShowValues';
 const CHARACTER_KEY = '@settings/character';
+const USER_NAME_KEY = '@settings/userName';
 
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [animations, setAnimationsState] = useState<AnimationSetting>('system');
@@ -57,6 +62,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [reminderHour, setReminderHourState] = useState<number>(20);
   const [graphShowValues, setGraphShowValuesState] = useState<boolean>(true);
   const [characterConfig, setCharacterConfigState] = useState<CharacterConfig>(DEFAULT_CHARACTER);
+  const [userName, setUserNameState] = useState<string>('');
 
   useEffect(() => {
     AsyncStorage.getItem(ANIMATIONS_KEY).then((value) => {
@@ -86,6 +92,9 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
           if (isValidCharacterConfig(parsed)) setCharacterConfigState(parsed);
         } catch {}
       }
+    });
+    AsyncStorage.getItem(USER_NAME_KEY).then((value) => {
+      if (typeof value === 'string') setUserNameState(value);
     });
   }, []);
 
@@ -124,6 +133,12 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     AsyncStorage.setItem(CHARACTER_KEY, JSON.stringify(value));
   }
 
+  function setUserName(value: string) {
+    const trimmed = value.trimStart();
+    setUserNameState(trimmed);
+    AsyncStorage.setItem(USER_NAME_KEY, trimmed);
+  }
+
   return (
     <SettingsContext.Provider value={{
       animations, setAnimations,
@@ -133,6 +148,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       reminderHour, setReminderHour,
       graphShowValues, setGraphShowValues,
       characterConfig, setCharacterConfig,
+      userName, setUserName,
     }}>
       {children}
     </SettingsContext.Provider>

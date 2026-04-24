@@ -4,11 +4,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated, Modal, Pressable, ScrollView,
-  StyleSheet, Switch, Text, useWindowDimensions, View,
+  StyleSheet, Switch, Text, TextInput, useWindowDimensions, View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 
-import { Border, Motion, Radius, Shadow, Size, Space, Type, Weight } from '@/constants/tokens';
+import { Border, FontFamily, Motion, Radius, Shadow, Size, Space, Type, Weight } from '@/constants/tokens';
 import { AnimationSetting, ThemeSetting, useSettings } from '@/context/settings-context';
 import { useAnimationsEnabled } from '@/hooks/use-animations-enabled';
 import { sendTestNotification } from '@/hooks/use-notification-scheduler';
@@ -244,7 +244,7 @@ function makeStyles(c: AppTheme, screenHeight: number) {
       paddingBottom: Space.lg,
       flexShrink: 0,
     },
-    pageTitle: { fontSize: 24, fontWeight: Weight.bold, color: c.text },
+    pageTitle: { fontFamily: FontFamily.displaySerif, fontSize: 28, letterSpacing: -0.3, color: c.text },
     iconBtn: {
       width: Size.iconBgSm, height: Size.iconBgSm, borderRadius: Radius.pill,
       backgroundColor: c.border,
@@ -330,6 +330,7 @@ export function SettingsDrawer({ visible, onClose }: Props) {
     reminderEnabled, setReminderEnabled,
     reminderHour, setReminderHour,
     graphShowValues, setGraphShowValues,
+    userName, setUserName,
   } = useSettings();
 
   const slideAnim = useRef(new Animated.Value(screenHeight)).current;
@@ -431,7 +432,7 @@ export function SettingsDrawer({ visible, onClose }: Props) {
                 <SettingRow
                   icon="🌙" iconBg={IB.purple}
                   title="Day starts at"
-                  sub="Night-owl friendly — late logs count toward the previous day"
+                  sub="Night-owl friendly: late logs count toward the previous day"
                 >
                   <CompactStepper
                     label={formatDayStartHour(dayStartHour)}
@@ -477,6 +478,17 @@ export function SettingsDrawer({ visible, onClose }: Props) {
               </SettingsGroup>
 
               <SettingsGroup label="Profile">
+                <SettingRow icon="🙂" iconBg={IB.gold} title="Your name">
+                  <TextInput
+                    value={userName}
+                    onChangeText={setUserName}
+                    placeholder="Name"
+                    placeholderTextColor={c.textMuted}
+                    style={{ ...Type.bodyMd, color: c.text, textAlign: 'right', minWidth: 80 }}
+                    maxLength={30}
+                    returnKeyType="done"
+                  />
+                </SettingRow>
                 <LinkRow
                   icon="🧑" iconBg={IB.gold}
                   title="Character"

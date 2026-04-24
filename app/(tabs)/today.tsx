@@ -11,7 +11,7 @@ import { EditEntryDrawer } from '@/components/edit-entry-drawer';
 import { TAB_BAR_HEIGHT } from '@/components/custom-tab-bar';
 import { isCompleted, TodayTrackerList, wouldComplete } from '@/components/today-tracker-list';
 import { TodayRoutineList } from '@/components/today-routine-list';
-import { Border, Motion, Radius, Space, Type, Weight } from '@/constants/tokens';
+import { Border, FontFamily, Motion, Radius, Space, Type, Weight } from '@/constants/tokens';
 import { useRoutines } from '@/context/routines-context';
 import { useSettings } from '@/context/settings-context';
 import { useTrackers } from '@/context/trackers-context';
@@ -43,6 +43,7 @@ function makeStyles(c: AppTheme) {
       textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: Space.xs,
     },
     greeting: { ...Type.display, color: c.text },
+    greetingName: { ...Type.display, fontFamily: FontFamily.displaySerifItalic, color: c.text },
     toggle: {
       paddingHorizontal: Space.lg, paddingVertical: Space.sm,
       borderRadius: Radius.xl, borderWidth: Border.strong, borderColor: c.border,
@@ -82,7 +83,7 @@ export default function TodayScreen() {
   const { isLoading, trackers, entries, addEntry, updateEntry, completeEntry, deleteEntry } = useTrackers();
   // currentPeriodEntryMap is still needed here for streak computation and the main tracker handlers.
   const { currentPeriodEntryMap } = useRoutines();
-  const { characterConfig } = useSettings();
+  const { characterConfig, userName } = useSettings();
   const [showAll, setShowAll] = useState(false);
   const [editingTracker, setEditingTracker] = useState<Tracker | null>(null);
   const [editingEntry, setEditingEntry] = useState<Entry | null>(null);
@@ -275,7 +276,10 @@ export default function TodayScreen() {
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             <Text style={styles.dateLabel}>{dateLabel}</Text>
-            <Text style={styles.greeting}>{greeting}</Text>
+            <Text style={styles.greeting}>
+              {userName ? `${greeting},\n` : greeting}
+              {userName ? <Text style={styles.greetingName}>{userName}</Text> : null}
+            </Text>
           </View>
           <View style={styles.avatarWrapper}>
             <Animated.View style={{ transform: [{ translateY: avatarTranslateY }] }}>
