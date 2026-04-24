@@ -1,3 +1,6 @@
+// "Today" tab: the main daily action screen. Shows greeting + avatar, then a
+// due-date-grouped list of trackers (Today/Tomorrow/…). Routine cards pin to
+// the top of Today. Completion animates rows out; "Show completed" reveals them.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
@@ -8,6 +11,7 @@ import { EditEntryDrawer } from '@/components/edit-entry-drawer';
 import { TAB_BAR_HEIGHT } from '@/components/custom-tab-bar';
 import { isCompleted, TodayTrackerList, wouldComplete } from '@/components/today-tracker-list';
 import { TodayRoutineList } from '@/components/today-routine-list';
+import { Border, FontFamily, Motion, Radius, Space, Type, Weight } from '@/constants/tokens';
 import { useRoutines } from '@/context/routines-context';
 import { useSettings } from '@/context/settings-context';
 import { useTrackers } from '@/context/trackers-context';
@@ -27,43 +31,43 @@ function makeStyles(c: AppTheme) {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingHorizontal: 20,
-      paddingTop: 60,
-      paddingBottom: 20,
+      paddingHorizontal: Space.xl,
+      paddingTop: Space.screenTop,
+      paddingBottom: Space.xl,
     },
-    headerLeft: { flex: 1, paddingRight: 12 },
+    headerLeft: { flex: 1, paddingRight: Space.base },
     avatarWrapper: { alignItems: 'center' },
     avatarShadow: { marginTop: -18 },
     dateLabel: {
-      fontSize: 12, fontWeight: '700', color: c.textSub,
-      textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4,
+      fontSize: 12, fontWeight: Weight.bold, color: c.textSub,
+      textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: Space.xs,
     },
-    greeting: { fontSize: 30, fontWeight: '400', color: c.text, lineHeight: 34 },
+    greeting: { ...Type.display, color: c.text },
+    greetingName: { ...Type.display, fontFamily: FontFamily.displaySerifItalic, color: c.text },
     toggle: {
-      paddingHorizontal: 14, paddingVertical: 7,
-      borderRadius: 20, borderWidth: 1.5, borderColor: c.border,
+      paddingHorizontal: Space.lg, paddingVertical: Space.sm,
+      borderRadius: Radius.xl, borderWidth: Border.strong, borderColor: c.border,
     },
     toggleActive: { backgroundColor: c.toggleActiveBg, borderColor: c.toggleActiveBg },
-    toggleText: { fontSize: 14, fontWeight: '600', color: c.textSub },
+    toggleText: { fontSize: 14, fontWeight: Weight.semibold, color: c.textSub },
     toggleTextActive: { color: c.toggleActiveText },
     completedRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingHorizontal: 20,
-      paddingTop: 20,
-      paddingBottom: 4,
+      paddingHorizontal: Space.xl,
+      paddingTop: Space.xl,
+      paddingBottom: Space.xs,
     },
-    completedLabel: { fontSize: 13, fontWeight: '700', color: c.textSub, textTransform: 'uppercase', letterSpacing: 0.4 },
-    completedToggleText: { fontSize: 14, fontWeight: '600', color: c.text },
-    empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8, padding: 32, paddingTop: 60 },
-    emptyText: { fontSize: 18, fontWeight: '600', color: c.text },
-    allDoneText: { fontSize: 22, fontWeight: '700', color: '#22c55e' },
-    emptySubtext: { fontSize: 15, color: c.textSub, textAlign: 'center' },
+    completedLabel: { ...Type.label, color: c.textSub, letterSpacing: 0.4 },
+    completedToggleText: { fontSize: 14, fontWeight: Weight.semibold, color: c.text },
+    empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Space.md, padding: Space['2xl'], paddingTop: Space.screenTop },
+    emptyText: { fontSize: 18, fontWeight: Weight.semibold, color: c.text },
+    allDoneText: { fontSize: 22, fontWeight: Weight.bold, color: '#22c55e' },
+    emptySubtext: { ...Type.bodyMd, color: c.textSub, textAlign: 'center' },
     sectionLabel: {
-      fontSize: 13, fontWeight: '700', color: c.textSub,
-      textTransform: 'uppercase', letterSpacing: 0.5,
-      paddingHorizontal: 16, paddingTop: 20, paddingBottom: 4,
+      ...Type.label, color: c.textSub,
+      paddingHorizontal: Space.lg, paddingTop: Space.xl, paddingBottom: Space.xs,
     },
     loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   });
@@ -79,7 +83,7 @@ export default function TodayScreen() {
   const { isLoading, trackers, entries, addEntry, updateEntry, completeEntry, deleteEntry } = useTrackers();
   // currentPeriodEntryMap is still needed here for streak computation and the main tracker handlers.
   const { currentPeriodEntryMap } = useRoutines();
-  const { characterConfig } = useSettings();
+  const { characterConfig, userName } = useSettings();
   const [showAll, setShowAll] = useState(false);
   const [editingTracker, setEditingTracker] = useState<Tracker | null>(null);
   const [editingEntry, setEditingEntry] = useState<Entry | null>(null);
@@ -126,8 +130,8 @@ export default function TodayScreen() {
     }
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(floatAnim, { toValue: 1, duration: 2200, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-        Animated.timing(floatAnim, { toValue: 0, duration: 2200, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(floatAnim, { toValue: 1, duration: Motion.loop, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(floatAnim, { toValue: 0, duration: Motion.loop, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
       ]),
     );
     loop.start();
@@ -272,7 +276,10 @@ export default function TodayScreen() {
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             <Text style={styles.dateLabel}>{dateLabel}</Text>
-            <Text style={styles.greeting}>{greeting}</Text>
+            <Text style={styles.greeting}>
+              {userName ? `${greeting},\n` : greeting}
+              {userName ? <Text style={styles.greetingName}>{userName}</Text> : null}
+            </Text>
           </View>
           <View style={styles.avatarWrapper}>
             <Animated.View style={{ transform: [{ translateY: avatarTranslateY }] }}>

@@ -1,3 +1,5 @@
+// Character builder: lets the user pick skin tone, hair style/color, and
+// glasses. Preview at top, option cards below.
 import { useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
@@ -8,6 +10,7 @@ import {
   HAIR_COLORS,
   SKIN_TONES,
 } from '@/components/character-avatar';
+import { Radius, Shadow, Size, Space, Weight } from '@/constants/tokens';
 import { useSettings } from '@/context/settings-context';
 import { AppTheme, useTheme } from '@/hooks/use-theme';
 
@@ -30,21 +33,17 @@ function makeStyles(c: AppTheme) {
     preview: {
       alignItems: 'center',
       justifyContent: 'center',
-      paddingVertical: 32,
+      paddingVertical: Space['2xl'],
       backgroundColor: c.card,
-      marginHorizontal: 20,
-      marginTop: 24,
-      borderRadius: 18,
-      shadowColor: '#000',
-      shadowOpacity: 0.05,
-      shadowRadius: 8,
-      shadowOffset: { width: 0, height: 2 },
-      elevation: 1,
+      marginHorizontal: Space.xl,
+      marginTop: Space.section,
+      borderRadius: Radius.xl,
+      ...Shadow.card,
     },
-    section: { marginTop: 28, paddingHorizontal: 20, gap: 10 },
+    section: { marginTop: Space.section, paddingHorizontal: Space.xl, gap: Space.base },
     sectionTitle: {
       fontSize: 12,
-      fontWeight: '700',
+      fontWeight: Weight.bold,
       color: c.textSub,
       textTransform: 'uppercase',
       letterSpacing: 0.6,
@@ -52,27 +51,23 @@ function makeStyles(c: AppTheme) {
     },
     card: {
       backgroundColor: c.card,
-      borderRadius: 14,
-      padding: 16,
-      gap: 14,
-      shadowColor: '#000',
-      shadowOpacity: 0.04,
-      shadowRadius: 6,
-      shadowOffset: { width: 0, height: 2 },
-      elevation: 1,
+      borderRadius: Radius.lg,
+      padding: Space.lg,
+      gap: Space.lg,
+      ...Shadow.card,
     },
-    rowLabel: { fontSize: 15, fontWeight: '600', color: c.text },
+    rowLabel: { fontSize: 15, fontWeight: Weight.semibold, color: c.text },
     segmentRow: {
       flexDirection: 'row',
       backgroundColor: c.segmentBg,
-      borderRadius: 10,
+      borderRadius: Radius.md,
       padding: 3,
       gap: 2,
     },
     segment: {
       flex: 1,
-      paddingVertical: 8,
-      borderRadius: 8,
+      paddingVertical: Space.md,
+      borderRadius: Radius.sm,
       alignItems: 'center',
     },
     segmentActive: {
@@ -83,20 +78,20 @@ function makeStyles(c: AppTheme) {
       shadowOffset: { width: 0, height: 1 },
       elevation: 2,
     },
-    segmentText: { fontSize: 13, fontWeight: '600', color: c.textSub },
+    segmentText: { fontSize: 13, fontWeight: Weight.semibold, color: c.textSub },
     segmentTextActive: { color: c.text },
-    swatchRow: { flexDirection: 'row', gap: 10, paddingVertical: 4 },
+    swatchRow: { flexDirection: 'row', gap: Space.base, paddingVertical: Space.xs },
     swatch: {
-      width: 32,
-      height: 32,
-      borderRadius: 16,
+      width: Size.iconBgSm,
+      height: Size.iconBgSm,
+      borderRadius: Radius.lg,
     },
     swatchSelected: {
       borderWidth: 3,
       borderColor: c.tint,
     },
     swatchHitArea: { padding: 5 },
-    bottomPad: { height: 40 },
+    bottomPad: { height: Size.control },
   });
 }
 

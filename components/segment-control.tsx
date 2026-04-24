@@ -1,6 +1,9 @@
+// Animated segmented control: a sliding pill backs the active option so tab
+// changes feel continuous rather than snapping between colored states.
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { Radius, Space, Type, Weight } from '@/constants/tokens';
 import { useAnimationsEnabled } from '@/hooks/use-animations-enabled';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -88,16 +91,11 @@ export function SegmentControl<T extends string>({ options, value, onChange, lab
 }
 
 const styles = StyleSheet.create({
-  field: { gap: 8 },
-  label: {
-    fontSize: 13,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
+  field: { gap: Space.md },
+  label: { ...Type.fieldLabel },
   track: {
     flexDirection: 'row',
-    borderRadius: 10,
+    borderRadius: Radius.md,
     padding: PADDING,
     gap: GAP,
   },
@@ -105,7 +103,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: PADDING,
     bottom: PADDING,
-    borderRadius: 8,
+    borderRadius: Radius.sm,
     shadowColor: '#000',
     shadowRadius: 3,
     shadowOffset: { width: 0, height: 1 },
@@ -113,11 +111,11 @@ const styles = StyleSheet.create({
   },
   segment: {
     flex: 1,
-    paddingVertical: 8,
-    borderRadius: 8,
+    paddingVertical: Space.md,
+    borderRadius: Radius.sm,
     alignItems: 'center',
     zIndex: 1,
   },
-  segmentText: { fontSize: 14, fontWeight: '500' },
-  segmentTextActive: { fontWeight: '600' },
+  segmentText: { fontSize: 14, fontWeight: Weight.medium },
+  segmentTextActive: { fontWeight: Weight.semibold },
 });

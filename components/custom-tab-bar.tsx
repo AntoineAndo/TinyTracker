@@ -1,3 +1,5 @@
+// Custom bottom tab bar: a pill containing the three main tabs and a
+// separate circular gear button that opens the settings drawer.
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import * as Haptics from 'expo-haptics';
 import { GlassView, isGlassEffectAPIAvailable } from 'expo-glass-effect';
@@ -5,6 +7,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Animated, LayoutChangeEvent, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { Radius, Shadow, Space } from '@/constants/tokens';
 import { useAnimationsEnabled } from '@/hooks/use-animations-enabled';
 import { AppTheme, useTheme } from '@/hooks/use-theme';
 
@@ -188,42 +191,34 @@ const styles = StyleSheet.create({
     right: 0,
     flexDirection: 'row',
     alignItems: 'flex-end',
-    paddingHorizontal: 12,
+    paddingHorizontal: Space.base,
     paddingBottom: 28,
-    paddingTop: 12,
-    gap: 8,
+    paddingTop: Space.base,
+    gap: Space.md,
   },
   gearCircle: {
     width: PILL_HEIGHT,
     height: PILL_HEIGHT,
-    borderRadius: 999,
+    borderRadius: Radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.12,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 8,
+    ...Shadow.floating,
   },
   pill: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 999,
+    borderRadius: Radius.pill,
     padding: PILL_PADDING,
     gap: ITEM_GAP,
-    shadowColor: '#000',
-    shadowOpacity: 0.12,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 8,
+    ...Shadow.floating,
   },
   slider: {
     position: 'absolute',
     top: PILL_PADDING,
     left: 0,
     height: ITEM_HEIGHT,
-    borderRadius: 999,
+    borderRadius: Radius.pill,
   },
   tabItem: {
     flex: 1,

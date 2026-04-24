@@ -1,6 +1,10 @@
+// Bottom-sheet drawer for editing or deleting a single entry. Renders the
+// appropriate value input (yes/no, count buttons, 1-5 range, log number)
+// based on tracker type, with drag-to-dismiss and backdrop fade.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Animated, Easing, Modal, PanResponder, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { Border, Motion, Radius, Size, Space, Weight } from '@/constants/tokens';
 import { useAnimationsEnabled } from '@/hooks/use-animations-enabled';
 import { AppTheme, useTheme } from '@/hooks/use-theme';
 import { getTrackerColorHex } from '@/lib/tracker-colors';
@@ -20,57 +24,57 @@ function makeDrawerStyles(c: AppTheme) {
       position: 'absolute',
       bottom: 0, left: 0, right: 0,
       backgroundColor: c.drawerBg,
-      borderTopLeftRadius: 20,
-      borderTopRightRadius: 20,
-      paddingHorizontal: 24,
-      paddingTop: 16,
-      paddingBottom: 40,
-      gap: 16,
+      borderTopLeftRadius: Radius.xl,
+      borderTopRightRadius: Radius.xl,
+      paddingHorizontal: Space.section,
+      paddingTop: Space.lg,
+      paddingBottom: Size.control,
+      gap: Space.lg,
     },
     dragZone: {
-      paddingBottom: 4,
+      paddingBottom: Space.xs,
     },
     handle: {
       width: 40, height: 4, borderRadius: 2,
-      backgroundColor: c.border, alignSelf: 'center', marginBottom: 4,
+      backgroundColor: c.border, alignSelf: 'center', marginBottom: Space.xs,
     },
-    title: { fontSize: 17, fontWeight: '600', color: c.text, textAlign: 'center' },
-    boolRow: { flexDirection: 'row', gap: 12 },
+    title: { fontSize: 17, fontWeight: Weight.semibold, color: c.text, textAlign: 'center' },
+    boolRow: { flexDirection: 'row', gap: Space.base },
     boolBtn: {
-      flex: 1, paddingVertical: 14, borderRadius: 12,
-      borderWidth: 2, borderColor: c.border, alignItems: 'center',
+      flex: 1, paddingVertical: Space.lg, borderRadius: Radius.md,
+      borderWidth: Border.emphasis, borderColor: c.border, alignItems: 'center',
     },
-    boolBtnText: { fontSize: 16, fontWeight: '600', color: c.textSub },
-    countRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+    boolBtnText: { fontSize: 16, fontWeight: Weight.semibold, color: c.textSub },
+    countRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.base },
     countBtn: {
-      minWidth: 56, paddingHorizontal: 12, paddingVertical: 14,
-      borderRadius: 12, borderWidth: 2, borderColor: c.border,
+      minWidth: 56, paddingHorizontal: Space.base, paddingVertical: Space.lg,
+      borderRadius: Radius.md, borderWidth: Border.emphasis, borderColor: c.border,
       alignItems: 'center', justifyContent: 'center',
     },
-    countBtnText: { fontSize: 18, fontWeight: '700', color: c.textSub },
+    countBtnText: { fontSize: 18, fontWeight: Weight.bold, color: c.textSub },
     countBtnTextActive: { color: '#fff' },
-    rangeRow: { flexDirection: 'row', gap: 10 },
+    rangeRow: { flexDirection: 'row', gap: Space.base },
     rangeBtn: {
-      flex: 1, aspectRatio: 1, borderRadius: 12,
-      borderWidth: 2, borderColor: c.border,
+      flex: 1, aspectRatio: 1, borderRadius: Radius.md,
+      borderWidth: Border.emphasis, borderColor: c.border,
       alignItems: 'center', justifyContent: 'center',
     },
-    rangeBtnText: { fontSize: 18, fontWeight: '700', color: c.textSub },
+    rangeBtnText: { fontSize: 18, fontWeight: Weight.bold, color: c.textSub },
     rangeBtnTextActive: { color: '#fff' },
     logRow: { alignItems: 'center' },
     logInput: {
-      width: 160, borderWidth: 2, borderRadius: 12,
-      paddingHorizontal: 16, paddingVertical: 14,
-      fontSize: 24, fontWeight: '700', textAlign: 'center',
+      width: 160, borderWidth: Border.emphasis, borderRadius: Radius.md,
+      paddingHorizontal: Space.lg, paddingVertical: Space.lg,
+      fontSize: 24, fontWeight: Weight.bold, textAlign: 'center',
     },
-    saveBtn: { borderRadius: 12, paddingVertical: 15, alignItems: 'center' },
-    saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+    saveBtn: { borderRadius: Radius.md, paddingVertical: Space.lg, alignItems: 'center' },
+    saveBtnText: { color: '#fff', fontSize: 16, fontWeight: Weight.semibold },
     deleteBtn: {
-      borderRadius: 10, paddingVertical: 9, alignItems: 'center',
-      borderWidth: 1, borderColor: '#fca5a5', alignSelf: 'center',
-      paddingHorizontal: 20,
+      borderRadius: Radius.md, paddingVertical: Space.md, alignItems: 'center',
+      borderWidth: Border.hairline, borderColor: '#fca5a5', alignSelf: 'center',
+      paddingHorizontal: Space.xl,
     },
-    deleteBtnText: { color: '#ef4444', fontSize: 13, fontWeight: '500' },
+    deleteBtnText: { color: '#ef4444', fontSize: 13, fontWeight: Weight.medium },
   });
 }
 
@@ -102,7 +106,7 @@ export function EditEntryDrawer({ tracker, entry, title, hideDelete, onSave, onD
     if (animationsEnabled) {
       Animated.parallel([
         Animated.spring(translateY, { toValue: 0, useNativeDriver: true, tension: 65, friction: 11 }),
-        Animated.timing(backdropOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
+        Animated.timing(backdropOpacity, { toValue: 1, duration: Motion.base, useNativeDriver: true }),
       ]).start();
     } else {
       translateY.setValue(0);
@@ -114,10 +118,10 @@ export function EditEntryDrawer({ tracker, entry, title, hideDelete, onSave, onD
     if (animationsEnabled) {
       Animated.parallel([
         Animated.timing(translateY, {
-          toValue: SHEET_TRANSLATE_CLOSED, duration: 260,
+          toValue: SHEET_TRANSLATE_CLOSED, duration: Motion.slow,
           useNativeDriver: true, easing: Easing.in(Easing.ease),
         }),
-        Animated.timing(backdropOpacity, { toValue: 0, duration: 200, useNativeDriver: true }),
+        Animated.timing(backdropOpacity, { toValue: 0, duration: Motion.base, useNativeDriver: true }),
       ]).start(() => onClose());
     } else {
       onClose();

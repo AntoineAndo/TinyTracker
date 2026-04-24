@@ -1,11 +1,15 @@
-// Card UI for a single routine — displays its name, time window, tracker rows, and a "Mark all done" action.
+// Card UI for a single routine - displays its name, time window, tracker rows, and a "Mark all done" action.
+// Individual rows slide out (height collapse + fade) when their tracker completes, mirroring the today list behavior.
 import { LinearGradient } from 'expo-linear-gradient';
-import { useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { AnimatedExitRow, ReboundTrigger, reboundDelay } from '@/components/animated-exit-row';
 import { TrackerEntryRow } from '@/components/tracker-entry-row';
+import { Border, Radius, Space, Type } from '@/constants/tokens';
+import { useAnimationsEnabled } from '@/hooks/use-animations-enabled';
 import { AppTheme, useTheme } from '@/hooks/use-theme';
-import { isCompleted } from '@/lib/tracker-utils';
+import { COMPLETION_CELEBRATION_MS, isCompleted } from '@/lib/tracker-utils';
 import { Entry, Routine, Tracker } from '@/lib/types';
 import { hexToRgb } from '@/lib/utils';
 
@@ -18,6 +22,8 @@ type RoutineCardProps = {
   onMarkAllDone: () => void;
   onSave: (tracker: Tracker, value: number) => void;
   onComplete: (tracker: Tracker) => void;
+  // Called with this routine's id when isDone is true and no row animations are in flight
+  onAllDone?: (routineId: string) => void;
 };
 
 // Pick an emoji based on the routine's start hour
@@ -41,42 +47,42 @@ function makeStyles(c: AppTheme) {
 
   return StyleSheet.create({
     card: {
-      marginHorizontal: 16,
-      marginBottom: 8,
-      borderRadius: 22,
-      borderWidth: 1,
+      marginHorizontal: Space.lg,
+      marginBottom: Space.md,
+      borderRadius: Radius.xl,
+      borderWidth: Border.hairline,
       borderColor,
       overflow: 'hidden',
       shadowColor: '#FFA34F',
       elevation: 5,
     },
     cardInner: {
-      padding: 16,
+      padding: Space.lg,
     },
     header: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 12,
-      marginBottom: 12,
+      gap: Space.base,
+      marginBottom: Space.base,
     },
     emoji: { fontSize: 26 },
     headerText: { flex: 1 },
-    title: { fontSize: 17, fontWeight: '700', color: c.text },
-    subtitle: { fontSize: 12, fontWeight: '600', color: c.textSub, marginTop: 2 },
+    title: { ...Type.h2, color: c.text },
+    subtitle: { ...Type.caption, color: c.textSub, marginTop: 2 },
     markAllBtn: {
       backgroundColor: c.text,
-      paddingHorizontal: 14,
-      paddingVertical: 8,
-      borderRadius: 999,
+      paddingHorizontal: Space.lg,
+      paddingVertical: Space.md,
+      borderRadius: Radius.pill,
     },
-    markAllBtnText: { color: c.background, fontSize: 12, fontWeight: '700' },
+    markAllBtnText: { ...Type.caption, fontWeight: '700', color: c.background },
     allDoneText: { fontSize: 13, fontWeight: '700', color: '#22c55e' },
-    rows: { gap: 8 },
+    rowGap: { height: Space.md },
     row: {
       backgroundColor: rowBg,
-      borderRadius: 16,
-      paddingHorizontal: 12,
-      paddingVertical: 10,
+      borderRadius: Radius.lg,
+      paddingHorizontal: Space.base,
+      paddingVertical: Space.base,
     },
   });
 }
@@ -85,12 +91,114 @@ function makeStyles(c: AppTheme) {
 const GRADIENT_LIGHT: [string, string] = ['#FFE4DA', '#FCE9C4'];
 const GRADIENT_DARK:  [string, string] = ['#3A1E18', '#3E2D0B'];
 
-export function RoutineCard({ routine, trackers, entryMap, isActive, isDone, onMarkAllDone, onSave, onComplete }: RoutineCardProps) {
+export function RoutineCard({ routine, trackers, entryMap, isActive, isDone, onMarkAllDone, onSave, onComplete, onAllDone }: RoutineCardProps) {
   const c = useTheme();
   const styles = useMemo(() => makeStyles(c), [c]);
   const gradientColors = c.scheme === 'dark' ? GRADIENT_DARK : GRADIENT_LIGHT;
+  const animationsEnabled = useAnimationsEnabled();
 
+  const [pendingDismissIds, setPendingDismissIds] = useState<Set<string>>(new Set());
+  const [exitingIds, setExitingIds] = useState<Set<string>>(new Set());
+  // Rows fully animated out - kept hidden even though they remain in the trackers prop
+  const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
+  const [reboundMap, setReboundMap] = useState<Record<string, ReboundTrigger>>({});
+
+  const dismissTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const reboundVersionsRef = useRef<Record<string, number>>({});
+  const prevExitingRef = useRef(new Set<string>());
+
+  const visibleTrackers = useMemo(
+    () => trackers.filter((t) => !hiddenIds.has(t.id)),
+    [trackers, hiddenIds],
+  );
+  const visibleTrackersRef = useRef(visibleTrackers);
+  visibleTrackersRef.current = visibleTrackers;
+
+  // When a row starts exiting, spring-animate the siblings below it
+  useEffect(() => {
+    const newlyExiting = [...exitingIds].filter((id) => !prevExitingRef.current.has(id));
+    if (newlyExiting.length === 0) {
+      prevExitingRef.current = new Set(exitingIds);
+      return;
+    }
+
+    const list = visibleTrackersRef.current;
+    const updates: Record<string, ReboundTrigger> = {};
+
+    for (const exitId of newlyExiting) {
+      const exitIndex = list.findIndex((t) => t.id === exitId);
+      if (exitIndex === -1) continue;
+      list.forEach((t, i) => {
+        if (i > exitIndex && !exitingIds.has(t.id)) {
+          const version = (reboundVersionsRef.current[t.id] ?? 0) + 1;
+          reboundVersionsRef.current[t.id] = version;
+          updates[t.id] = { version, delay: reboundDelay(i - exitIndex - 1) };
+        }
+      });
+    }
+
+    if (Object.keys(updates).length > 0) {
+      setReboundMap((prev) => ({ ...prev, ...updates }));
+    }
+
+    prevExitingRef.current = new Set(exitingIds);
+  }, [exitingIds]);
+
+  useEffect(() => {
+    return () => {
+      dismissTimers.current.forEach(clearTimeout);
+    };
+  }, []);
+
+  // Prune hiddenIds when a tracker is no longer completed (e.g. day rollover, entry edit)
+  // so rows correctly reappear if the underlying data changes.
+  useEffect(() => {
+    setHiddenIds((prev) => {
+      if (prev.size === 0) return prev;
+      const next = new Set<string>();
+      for (const id of prev) {
+        const t = trackers.find((tr) => tr.id === id);
+        const rt = routine.trackers.find((r) => r.id === id);
+        if (t && isCompleted(t, entryMap[id], rt?.routineTarget)) next.add(id);
+      }
+      return next.size === prev.size ? prev : next;
+    });
+  }, [trackers, entryMap, routine.trackers]);
+
+  const handleRowComplete = useCallback((tracker: Tracker) => {
+    // Persist the completion immediately, then drive the celebration + exit animation locally
+    onComplete(tracker);
+
+    const id = tracker.id;
+    const existing = dismissTimers.current.get(id);
+    if (existing) clearTimeout(existing);
+
+    setPendingDismissIds((prev) => new Set([...prev, id]));
+    const timer = setTimeout(() => {
+      dismissTimers.current.delete(id);
+      setPendingDismissIds((prev) => { const n = new Set(prev); n.delete(id); return n; });
+      setExitingIds((prev) => new Set([...prev, id]));
+    }, COMPLETION_CELEBRATION_MS);
+    dismissTimers.current.set(id, timer);
+  }, [onComplete]);
+
+  const handleExited = useCallback((id: string) => {
+    setExitingIds((prev) => { const n = new Set(prev); n.delete(id); return n; });
+    setHiddenIds((prev) => new Set([...prev, id]));
+  }, []);
+
+  // Signal the parent to remove the card once done and no row animation is in flight.
+  // Fires on mount too so already-completed routines animate out on app restart.
+  // Idempotency is guaranteed by the parent's handledRoutineIds ref.
+  useEffect(() => {
+    if (isDone && pendingDismissIds.size === 0 && exitingIds.size === 0) {
+      onAllDone?.(routine.id);
+    }
+  }, [isDone, pendingDismissIds.size, exitingIds.size, onAllDone]);
+
+  // Exclude animating/hidden trackers from the pending count shown in the subtitle
   const pendingCount = trackers.filter((t) => {
+    if (hiddenIds.has(t.id) || pendingDismissIds.has(t.id) || exitingIds.has(t.id)) return false;
     const rt = routine.trackers.find((r) => r.id === t.id);
     return !isCompleted(t, entryMap[t.id], rt?.routineTarget);
   }).length;
@@ -125,22 +233,33 @@ export function RoutineCard({ routine, trackers, entryMap, isActive, isDone, onM
           )}
         </View>
 
-        <View style={styles.rows}>
-          {trackers.map((tracker) => {
+        <View>
+          {visibleTrackers.map((tracker, index) => {
             const rt = routine.trackers.find((r) => r.id === tracker.id);
             return (
-              <View key={tracker.id} style={styles.row}>
-                <TrackerEntryRow
-                  tracker={tracker}
-                  entry={entryMap[tracker.id]}
-                  streak={0}
-                  showCompleted={true}
-                  onSave={(value) => onSave(tracker, value)}
-                  onComplete={() => onComplete(tracker)}
-                  variant="inset"
-                  routineTarget={rt?.routineTarget}
-                />
-              </View>
+              <AnimatedExitRow
+                key={tracker.id}
+                exiting={exitingIds.has(tracker.id)}
+                onExited={() => handleExited(tracker.id)}
+                animationsEnabled={animationsEnabled}
+                rebound={reboundMap[tracker.id]}
+              >
+                <View style={styles.row}>
+                  <TrackerEntryRow
+                    tracker={tracker}
+                    entry={entryMap[tracker.id]}
+                    streak={0}
+                    showCompleted={true}
+                    isPendingDismiss={pendingDismissIds.has(tracker.id)}
+                    onSave={(value) => onSave(tracker, value)}
+                    onComplete={() => handleRowComplete(tracker)}
+                    variant="inset"
+                    routineTarget={rt?.routineTarget}
+                  />
+                </View>
+                {/* Gap collapses with the row so spacing doesn't persist after exit */}
+                {index < visibleTrackers.length - 1 && <View style={styles.rowGap} />}
+              </AnimatedExitRow>
             );
           })}
         </View>

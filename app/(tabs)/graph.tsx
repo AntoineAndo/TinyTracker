@@ -1,9 +1,13 @@
+// "Graph" tab: 30-day heat-grid of every tracker. Left column pins names,
+// right column horizontally scrolls through days (or period cells for
+// non-daily trackers).
 import { useFocusEffect } from 'expo-router';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { TAB_BAR_HEIGHT } from '@/components/custom-tab-bar';
 import { EditEntryDrawer } from '@/components/edit-entry-drawer';
+import { FontFamily, Radius, Space, Type, Weight } from '@/constants/tokens';
 import { useTrackers } from '@/context/trackers-context';
 import { useCurrentDay } from '@/hooks/use-current-day';
 import { useSettings } from '@/context/settings-context';
@@ -14,12 +18,13 @@ import { getLogicalDay, hexToRgb, isSameDay, trackerInterval } from '@/lib/utils
 
 // ── Layout constants ───────────────────────────────────────────────────────────
 
-const CELL = 28;
-const CELL_GAP = 0;
+const CELL = 26;
+const CELL_GAP = 4;
 const CELL_STEP = CELL + CELL_GAP;
-const LEFT_WIDTH = 130;
+const LEFT_WIDTH = 140;
+// 4px top + 4px bottom padding around each cell row
 const ROW_HEIGHT = CELL + CELL_GAP * 2;
-const HEADER_HEIGHT = 44;
+const HEADER_HEIGHT = 48;
 
 const DAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -92,44 +97,44 @@ function makeStyles(c: AppTheme) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: c.background },
     header: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: 20,
-      paddingTop: 60,
-      paddingBottom: 16,
+      paddingHorizontal: Space.xl,
+      paddingTop: Space.screenTop,
+      paddingBottom: Space.lg,
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: c.border,
     },
-    screenTitle: { fontSize: 28, fontWeight: '700', color: c.text },
+    screenTitle:       { ...Type.display, color: c.text },
+    screenTitleItalic: { fontFamily: FontFamily.displaySerifItalic },
+    screenSubtitle:    { ...Type.caption, color: c.textMuted, marginTop: Space.xs },
     gridWrapper: { flex: 1, flexDirection: 'row' },
     leftCol: {
       width: LEFT_WIDTH,
       borderRightWidth: StyleSheet.hairlineWidth,
       borderRightColor: c.border,
-      paddingLeft: 16,
+      paddingLeft: Space.lg,
     },
-    nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingRight: 8 },
-    nameDot: { width: 10, height: 10, borderRadius: 5, flexShrink: 0 },
-    nameText: { fontSize: 13, fontWeight: '600', color: c.text, flexShrink: 1 },
+    nameRow: { flexDirection: 'row', alignItems: 'center', gap: Space.base, paddingRight: Space.md },
+    nameDot: { width: 12, height: 12, borderRadius: 6, flexShrink: 0 },
+    nameText: { fontSize: 13, fontWeight: Weight.semibold, color: c.text, flexShrink: 1 },
     scrollArea: { flex: 1 },
-    scrollContent: { paddingHorizontal: 8, paddingBottom: TAB_BAR_HEIGHT },
-    dateHeader: { flexDirection: 'row', alignItems: 'flex-end', paddingBottom: 6 },
+    scrollContent: { paddingHorizontal: Space.base, paddingBottom: TAB_BAR_HEIGHT },
+    dateHeader: { flexDirection: 'row', alignItems: 'flex-end', paddingBottom: Space.xs },
     dateCell: { alignItems: 'center', justifyContent: 'flex-end' },
     monthLabel: {
-      fontSize: 9, fontWeight: '700', color: c.textSub,
-      textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 1,
+      ...Type.overline, color: c.textSub, letterSpacing: 0.5, marginBottom: 2,
     },
-    dayLabel: { fontSize: 10, color: c.textMuted, fontWeight: '500' },
-    dayLabelToday: { color: c.tint, fontWeight: '700' },
+    dayLabel: { fontSize: 10, color: c.textMuted, fontWeight: Weight.medium },
+    dayLabelToday: { color: c.tint, fontWeight: Weight.bold },
+    todayDot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: c.tint, marginTop: 2 },
     cellRow: { flexDirection: 'row', alignItems: 'center' },
-    cell: { width: CELL, height: CELL, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: c.border },
-    cellEmpty: { borderWidth: 1, borderColor: c.cellEmpty },
-    cellNumber: { fontSize: 11, fontWeight: '700', textAlign: 'center' },
+    // Base cell: filled rounded square — borders removed in favor of background fill
+    cell: { width: CELL, height: CELL, borderRadius: Radius.sm, alignItems: 'center', justifyContent: 'center' },
+    cellEmpty: { backgroundColor: c.cellEmpty },
+    cellNumber: { fontSize: 11, fontWeight: Weight.bold, textAlign: 'center' },
     cellIndicator: { position: 'absolute', width: 5, height: 5, borderRadius: 2.5 },
-    empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8 },
-    emptyText: { fontSize: 18, fontWeight: '600', color: c.text },
-    emptySubtext: { fontSize: 15, color: c.textSub },
+    empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Space.md },
+    emptyText: { fontSize: 18, fontWeight: Weight.semibold, color: c.text },
+    emptySubtext: { ...Type.bodyMd, color: c.textSub },
   });
 }
 
@@ -146,7 +151,8 @@ function Cell({ tracker, entry, styles, logScale, isCurrentDay, onPress, showVal
   widthDays?: number;
 }) {
   const hex = getTrackerColorHex(tracker.color);
-  const w = widthDays > 1 ? { width: widthDays * CELL_STEP } : undefined;
+  // Subtract one gap so multi-day period cells don't eat into the trailing spacing
+  const w = widthDays > 1 ? { width: widthDays * CELL_STEP - CELL_GAP } : undefined;
 
   if (!entry) return <Pressable onPress={onPress}><View style={[styles.cell, styles.cellEmpty, w]} /></Pressable>;
 
@@ -288,7 +294,8 @@ export default function GraphScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.screenTitle}>Graph</Text>
+        <Text style={styles.screenTitle}>Your <Text style={styles.screenTitleItalic}>history</Text></Text>
+        <Text style={styles.screenSubtitle}>Last 30 days</Text>
       </View>
 
       <View style={styles.gridWrapper}>
@@ -323,6 +330,7 @@ export default function GraphScreen() {
                     <Text style={[styles.dayLabel, isToday && styles.dayLabelToday]}>
                       {DAYS[day.getDay()]}
                     </Text>
+                    {isToday && <View style={styles.todayDot} />}
                   </View>
                 );
               })}

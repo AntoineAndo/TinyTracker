@@ -1,10 +1,14 @@
+// Bottom-sheet settings drawer with two swipable pages: main settings list
+// and an Appearance sub-page (theme + animations). Opens from the gear button
+// in the custom tab bar.
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated, Modal, Pressable, ScrollView,
-  StyleSheet, Switch, Text, useWindowDimensions, View,
+  StyleSheet, Switch, Text, TextInput, useWindowDimensions, View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 
+import { Border, FontFamily, Motion, Radius, Shadow, Size, Space, Type, Weight } from '@/constants/tokens';
 import { AnimationSetting, ThemeSetting, useSettings } from '@/context/settings-context';
 import { useAnimationsEnabled } from '@/hooks/use-animations-enabled';
 import { sendTestNotification } from '@/hooks/use-notification-scheduler';
@@ -69,7 +73,7 @@ function DarkPreview({ mode }: { mode: ThemeSetting }) {
   const text = mode === 'light' ? lightText  : mode === 'dark' ? darkText  : lightText;
 
   return (
-    <View style={{ width: 52, height: 66, borderRadius: 11, overflow: 'hidden', borderWidth: 1, borderColor: c.border }}>
+    <View style={{ width: 52, height: 66, borderRadius: 11, overflow: 'hidden', borderWidth: Border.hairline, borderColor: c.border }}>
       {/* Background — split for system */}
       {mode === 'system' ? (
         <View style={{ flex: 1, flexDirection: 'row' }}>
@@ -94,20 +98,20 @@ function SettingsGroup({ label, children }: { label: string; children: React.Rea
   const c = useTheme();
   const childArray = React.Children.toArray(children).filter(Boolean);
   return (
-    <View style={{ marginTop: 24, paddingHorizontal: 20 }}>
+    <View style={{ marginTop: Space.section, paddingHorizontal: Space.xl }}>
       <Text style={{
-        fontSize: 11, fontWeight: '700', color: c.textSub,
-        textTransform: 'uppercase', letterSpacing: 0.6,
-        paddingHorizontal: 8, paddingBottom: 8,
+        ...Type.overline, fontSize: 11, color: c.textSub,
+        paddingHorizontal: Space.md, paddingBottom: Space.md,
       }}>
         {label}
       </Text>
       <View style={{
-        backgroundColor: c.card, borderRadius: 18, overflow: 'hidden',
-        shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 6,
-        shadowOffset: { width: 0, height: 2 }, elevation: 1,
+        backgroundColor: c.card, borderRadius: Radius.xl, overflow: 'hidden',
+        ...Shadow.card,
       }}>
         {childArray.map((child, i) => (
+          // marginLeft indents the divider past the icon column (iconBgSm 32
+          // + horizontal padding 14 + gap 12 = 58) so it aligns under titles.
           <React.Fragment key={i}>
             {i > 0 && <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: c.border, marginLeft: 58 }} />}
             {child}
@@ -129,12 +133,12 @@ type SettingRowProps = {
 function SettingRow({ icon, iconBg, title, sub, children }: SettingRowProps) {
   const c = useTheme();
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 12 }}>
-      <View style={{ width: 32, height: 32, borderRadius: 9, backgroundColor: iconBg, alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: Space.base, paddingHorizontal: Space.lg, paddingVertical: Space.base }}>
+      <View style={{ width: Size.iconBgSm, height: Size.iconBgSm, borderRadius: Radius.sm, backgroundColor: iconBg, alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
         <Text style={{ fontSize: 16 }}>{icon}</Text>
       </View>
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={{ fontSize: 15, fontWeight: '600', color: c.text }}>{title}</Text>
+        <Text style={{ ...Type.bodyMd, color: c.text }}>{title}</Text>
         {sub && <Text style={{ fontSize: 11, color: c.textSub, marginTop: 1, lineHeight: 16 }}>{sub}</Text>}
       </View>
       {children && <View style={{ flexShrink: 0 }}>{children}</View>}
@@ -155,16 +159,16 @@ function LinkRow({ icon, iconBg, title, detail, danger, onPress }: LinkRowProps)
   const c = useTheme();
   return (
     <Pressable
-      style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 12 }}
+      style={{ flexDirection: 'row', alignItems: 'center', gap: Space.base, paddingHorizontal: Space.lg, paddingVertical: Space.base }}
       onPress={onPress}
     >
       {icon && iconBg && (
-        <View style={{ width: 32, height: 32, borderRadius: 9, backgroundColor: iconBg, alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <View style={{ width: Size.iconBgSm, height: Size.iconBgSm, borderRadius: Radius.sm, backgroundColor: iconBg, alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
           <Text style={{ fontSize: 16 }}>{icon}</Text>
         </View>
       )}
-      <Text style={{ flex: 1, fontSize: 15, fontWeight: '600', color: danger ? '#ef4444' : c.text }}>{title}</Text>
-      {detail && <Text style={{ fontSize: 13, color: c.textSub, marginRight: 4 }}>{detail}</Text>}
+      <Text style={{ ...Type.bodyMd, flex: 1, color: danger ? '#ef4444' : c.text }}>{title}</Text>
+      {detail && <Text style={{ fontSize: 13, color: c.textSub, marginRight: Space.xs }}>{detail}</Text>}
       <Text style={{ fontSize: 16, color: c.textMuted, lineHeight: 20 }}>›</Text>
     </Pressable>
   );
@@ -177,19 +181,19 @@ function CompactStepper({ onDecrement, onIncrement, label }: {
 }) {
   const c = useTheme();
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: c.segmentBg, borderRadius: 999, padding: 2, gap: 2 }}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: c.segmentBg, borderRadius: Radius.pill, padding: 2, gap: 2 }}>
       <Pressable
-        style={{ width: 28, height: 28, borderRadius: 999, backgroundColor: c.card, alignItems: 'center', justifyContent: 'center' }}
+        style={{ width: 28, height: 28, borderRadius: Radius.pill, backgroundColor: c.card, alignItems: 'center', justifyContent: 'center' }}
         onPress={onDecrement}
       >
-        <Text style={{ fontSize: 16, fontWeight: '700', color: c.text, lineHeight: 20 }}>−</Text>
+        <Text style={{ fontSize: 16, fontWeight: Weight.bold, color: c.text, lineHeight: 20 }}>−</Text>
       </Pressable>
-      <Text style={{ minWidth: 56, textAlign: 'center', fontSize: 13, fontWeight: '700', color: c.text }}>{label}</Text>
+      <Text style={{ minWidth: 56, textAlign: 'center', fontSize: 13, fontWeight: Weight.bold, color: c.text }}>{label}</Text>
       <Pressable
-        style={{ width: 28, height: 28, borderRadius: 999, backgroundColor: c.card, alignItems: 'center', justifyContent: 'center' }}
+        style={{ width: 28, height: 28, borderRadius: Radius.pill, backgroundColor: c.card, alignItems: 'center', justifyContent: 'center' }}
         onPress={onIncrement}
       >
-        <Text style={{ fontSize: 16, fontWeight: '700', color: c.text, lineHeight: 20 }}>+</Text>
+        <Text style={{ fontSize: 16, fontWeight: Weight.bold, color: c.text, lineHeight: 20 }}>+</Text>
       </Pressable>
     </View>
   );
@@ -203,6 +207,8 @@ function makeStyles(c: AppTheme, screenHeight: number) {
       ...StyleSheet.absoluteFillObject,
       backgroundColor: 'rgba(0,0,0,0.4)',
     },
+    // Drawer top corners are larger than the standard card (xl=20) so the
+    // sheet reads as a distinct surface floating above the rest of the app.
     sheet: {
       position: 'absolute',
       left: 0, right: 0, bottom: 0,
@@ -213,13 +219,13 @@ function makeStyles(c: AppTheme, screenHeight: number) {
     },
     handle: {
       alignItems: 'center',
-      paddingTop: 14,
-      paddingBottom: 4,
+      paddingTop: Space.lg,
+      paddingBottom: Space.xs,
       flexShrink: 0,
     },
     handleBar: {
       width: 40, height: 4,
-      borderRadius: 999,
+      borderRadius: Radius.pill,
       backgroundColor: c.border,
     },
     pagesContainer: {
@@ -233,14 +239,14 @@ function makeStyles(c: AppTheme, screenHeight: number) {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingHorizontal: 20,
-      paddingTop: 8,
-      paddingBottom: 16,
+      paddingHorizontal: Space.xl,
+      paddingTop: Space.md,
+      paddingBottom: Space.lg,
       flexShrink: 0,
     },
-    pageTitle: { fontSize: 24, fontWeight: '700', color: c.text },
+    pageTitle: { fontFamily: FontFamily.displaySerif, fontSize: 28, letterSpacing: -0.3, color: c.text },
     iconBtn: {
-      width: 32, height: 32, borderRadius: 999,
+      width: Size.iconBgSm, height: Size.iconBgSm, borderRadius: Radius.pill,
       backgroundColor: c.border,
       alignItems: 'center', justifyContent: 'center',
     },
@@ -249,62 +255,59 @@ function makeStyles(c: AppTheme, screenHeight: number) {
     onDeviceCard: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 12,
+      gap: Space.base,
       backgroundColor: c.card,
-      borderRadius: 20,
-      padding: 14,
-      borderWidth: 1,
+      borderRadius: Radius.xl,
+      padding: Space.lg,
+      borderWidth: Border.hairline,
       borderColor: c.border,
-      marginHorizontal: 20,
-      marginBottom: 4,
+      marginHorizontal: Space.xl,
+      marginBottom: Space.xs,
     },
     onDeviceIcon: {
-      width: 40, height: 40, borderRadius: 12,
+      width: Size.control, height: Size.control, borderRadius: Radius.md,
       backgroundColor: 'rgba(34,197,94,0.15)',
       alignItems: 'center', justifyContent: 'center',
       flexShrink: 0,
     },
     // Appearance sub-page
-    appearanceSection: { marginTop: 8, paddingHorizontal: 20 },
-    appearanceSectionLater: { marginTop: 24, paddingHorizontal: 20 },
+    appearanceSection: { marginTop: Space.md, paddingHorizontal: Space.xl },
+    appearanceSectionLater: { marginTop: Space.section, paddingHorizontal: Space.xl },
     appearanceSectionLabel: {
-      fontSize: 11, fontWeight: '700', color: c.textSub,
-      textTransform: 'uppercase', letterSpacing: 0.6,
-      paddingHorizontal: 8, paddingBottom: 8,
+      ...Type.overline, fontSize: 11, color: c.textSub,
+      paddingHorizontal: Space.md, paddingBottom: Space.md,
     },
     themeCard: {
-      backgroundColor: c.card, borderRadius: 18, padding: 12,
-      flexDirection: 'row', gap: 8,
-      shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 6,
-      shadowOffset: { width: 0, height: 2 }, elevation: 1,
+      backgroundColor: c.card, borderRadius: Radius.xl, padding: Space.base,
+      flexDirection: 'row', gap: Space.md,
+      ...Shadow.card,
     },
     themeBtn: {
-      flex: 1, borderRadius: 14, padding: 10,
-      alignItems: 'center', gap: 8,
+      flex: 1, borderRadius: Radius.md, padding: Space.base,
+      alignItems: 'center', gap: Space.md,
     },
     themeBtnActive: { backgroundColor: c.segmentBg },
-    themeBtnLabel: { fontSize: 12, fontWeight: '600', color: c.text },
+    themeBtnLabel: { fontSize: 12, fontWeight: Weight.semibold, color: c.text },
     segmentCard: {
-      backgroundColor: c.card, borderRadius: 18, padding: 14, gap: 12,
-      shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 6,
-      shadowOffset: { width: 0, height: 2 }, elevation: 1,
+      backgroundColor: c.card, borderRadius: Radius.xl, padding: Space.lg, gap: Space.base,
+      ...Shadow.card,
     },
     segmentRow: {
       flexDirection: 'row', backgroundColor: c.segmentBg,
-      borderRadius: 10, padding: 3, gap: 2,
+      borderRadius: Radius.md, padding: 3, gap: 2,
     },
-    segment: { flex: 1, paddingVertical: 8, borderRadius: 8, alignItems: 'center' },
+    segment: { flex: 1, paddingVertical: Space.md, borderRadius: Radius.sm, alignItems: 'center' },
     segmentActive: {
       backgroundColor: c.segmentActiveBg,
       shadowColor: '#000', shadowOpacity: c.segmentActiveShadowOpacity,
       shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 2,
     },
-    segmentText: { fontSize: 14, fontWeight: '600', color: c.textSub },
+    segmentText: { fontSize: 14, fontWeight: Weight.semibold, color: c.textSub },
     segmentTextActive: { color: c.text },
     segmentDesc: { fontSize: 13, color: c.textMuted, textAlign: 'center' },
     versionFooter: {
       textAlign: 'center', color: c.textMuted,
-      fontSize: 11, marginTop: 28, marginBottom: 4,
+      fontSize: 11, marginTop: Space.section, marginBottom: Space.xs,
     },
   });
 }
@@ -327,6 +330,7 @@ export function SettingsDrawer({ visible, onClose }: Props) {
     reminderEnabled, setReminderEnabled,
     reminderHour, setReminderHour,
     graphShowValues, setGraphShowValues,
+    userName, setUserName,
   } = useSettings();
 
   const slideAnim = useRef(new Animated.Value(screenHeight)).current;
@@ -356,7 +360,7 @@ export function SettingsDrawer({ visible, onClose }: Props) {
       } else {
         Animated.parallel([
           Animated.spring(slideAnim, { toValue: 0, useNativeDriver: true, stiffness: 280, damping: 32, mass: 0.9 }),
-          Animated.timing(backdropAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
+          Animated.timing(backdropAnim, { toValue: 1, duration: Motion.base, useNativeDriver: true }),
         ]).start();
       }
     } else {
@@ -369,8 +373,8 @@ export function SettingsDrawer({ visible, onClose }: Props) {
         pageAnim.setValue(0);
       } else {
         Animated.parallel([
-          Animated.timing(slideAnim, { toValue: screenHeight, duration: 260, useNativeDriver: true }),
-          Animated.timing(backdropAnim, { toValue: 0, duration: 200, useNativeDriver: true }),
+          Animated.timing(slideAnim, { toValue: screenHeight, duration: Motion.slow, useNativeDriver: true }),
+          Animated.timing(backdropAnim, { toValue: 0, duration: Motion.base, useNativeDriver: true }),
         ]).start(() => setModalVisible(false));
       }
       return () => clearTimeout(reset);
@@ -401,14 +405,14 @@ export function SettingsDrawer({ visible, onClose }: Props) {
               </Pressable>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 36 }}>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: Space['2xl'] }}>
               {/* On-device only banner */}
               <View style={styles.onDeviceCard}>
                 <View style={styles.onDeviceIcon}>
                   <Text style={{ fontSize: 20 }}>🔒</Text>
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 15, fontWeight: '700', color: c.text }}>On-device only</Text>
+                  <Text style={{ ...Type.bodyMd, fontWeight: Weight.bold, color: c.text }}>On-device only</Text>
                   <Text style={{ fontSize: 12, color: c.textSub, marginTop: 2, lineHeight: 17 }}>
                     No account, no cloud. Your data stays on this phone.
                   </Text>
@@ -428,7 +432,7 @@ export function SettingsDrawer({ visible, onClose }: Props) {
                 <SettingRow
                   icon="🌙" iconBg={IB.purple}
                   title="Day starts at"
-                  sub="Night-owl friendly — late logs count toward the previous day"
+                  sub="Night-owl friendly: late logs count toward the previous day"
                 >
                   <CompactStepper
                     label={formatDayStartHour(dayStartHour)}
@@ -474,6 +478,17 @@ export function SettingsDrawer({ visible, onClose }: Props) {
               </SettingsGroup>
 
               <SettingsGroup label="Profile">
+                <SettingRow icon="🙂" iconBg={IB.gold} title="Your name">
+                  <TextInput
+                    value={userName}
+                    onChangeText={setUserName}
+                    placeholder="Name"
+                    placeholderTextColor={c.textMuted}
+                    style={{ ...Type.bodyMd, color: c.text, textAlign: 'right', minWidth: 80 }}
+                    maxLength={30}
+                    returnKeyType="done"
+                  />
+                </SettingRow>
                 <LinkRow
                   icon="🧑" iconBg={IB.gold}
                   title="Character"
@@ -501,10 +516,10 @@ export function SettingsDrawer({ visible, onClose }: Props) {
                 <Text style={styles.backBtnText}>‹</Text>
               </Pressable>
               <Text style={styles.pageTitle}>Appearance</Text>
-              <View style={{ width: 32 }} />
+              <View style={{ width: Size.iconBgSm }} />
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 36 }}>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: Space['2xl'] }}>
               {/* Theme — visual preview cards */}
               <View style={styles.appearanceSection}>
                 <Text style={styles.appearanceSectionLabel}>Theme</Text>
