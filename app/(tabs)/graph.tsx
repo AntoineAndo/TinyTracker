@@ -1,9 +1,13 @@
+// "Graph" tab: 30-day heat-grid of every tracker. Left column pins names,
+// right column horizontally scrolls through days (or period cells for
+// non-daily trackers).
 import { useFocusEffect } from 'expo-router';
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { TAB_BAR_HEIGHT } from '@/components/custom-tab-bar';
 import { EditEntryDrawer } from '@/components/edit-entry-drawer';
+import { Border, Space, Type, Weight } from '@/constants/tokens';
 import { useTrackers } from '@/context/trackers-context';
 import { useCurrentDay } from '@/hooks/use-current-day';
 import { useSettings } from '@/context/settings-context';
@@ -95,41 +99,41 @@ function makeStyles(c: AppTheme) {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingHorizontal: 20,
-      paddingTop: 60,
-      paddingBottom: 16,
+      paddingHorizontal: Space.xl,
+      paddingTop: Space.screenTop,
+      paddingBottom: Space.lg,
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: c.border,
     },
-    screenTitle: { fontSize: 28, fontWeight: '700', color: c.text },
+    screenTitle: { fontSize: 28, fontWeight: Weight.bold, color: c.text },
     gridWrapper: { flex: 1, flexDirection: 'row' },
     leftCol: {
       width: LEFT_WIDTH,
       borderRightWidth: StyleSheet.hairlineWidth,
       borderRightColor: c.border,
-      paddingLeft: 16,
+      paddingLeft: Space.lg,
     },
-    nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingRight: 8 },
+    nameRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md, paddingRight: Space.md },
     nameDot: { width: 10, height: 10, borderRadius: 5, flexShrink: 0 },
-    nameText: { fontSize: 13, fontWeight: '600', color: c.text, flexShrink: 1 },
+    nameText: { fontSize: 13, fontWeight: Weight.semibold, color: c.text, flexShrink: 1 },
     scrollArea: { flex: 1 },
-    scrollContent: { paddingHorizontal: 8, paddingBottom: TAB_BAR_HEIGHT },
-    dateHeader: { flexDirection: 'row', alignItems: 'flex-end', paddingBottom: 6 },
+    scrollContent: { paddingHorizontal: Space.md, paddingBottom: TAB_BAR_HEIGHT },
+    dateHeader: { flexDirection: 'row', alignItems: 'flex-end', paddingBottom: Space.sm },
     dateCell: { alignItems: 'center', justifyContent: 'flex-end' },
     monthLabel: {
-      fontSize: 9, fontWeight: '700', color: c.textSub,
+      fontSize: 9, fontWeight: Weight.bold, color: c.textSub,
       textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 1,
     },
-    dayLabel: { fontSize: 10, color: c.textMuted, fontWeight: '500' },
-    dayLabelToday: { color: c.tint, fontWeight: '700' },
+    dayLabel: { fontSize: 10, color: c.textMuted, fontWeight: Weight.medium },
+    dayLabelToday: { color: c.tint, fontWeight: Weight.bold },
     cellRow: { flexDirection: 'row', alignItems: 'center' },
-    cell: { width: CELL, height: CELL, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: c.border },
-    cellEmpty: { borderWidth: 1, borderColor: c.cellEmpty },
-    cellNumber: { fontSize: 11, fontWeight: '700', textAlign: 'center' },
+    cell: { width: CELL, height: CELL, alignItems: 'center', justifyContent: 'center', borderWidth: Border.hairline, borderColor: c.border },
+    cellEmpty: { borderWidth: Border.hairline, borderColor: c.cellEmpty },
+    cellNumber: { fontSize: 11, fontWeight: Weight.bold, textAlign: 'center' },
     cellIndicator: { position: 'absolute', width: 5, height: 5, borderRadius: 2.5 },
-    empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8 },
-    emptyText: { fontSize: 18, fontWeight: '600', color: c.text },
-    emptySubtext: { fontSize: 15, color: c.textSub },
+    empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Space.md },
+    emptyText: { fontSize: 18, fontWeight: Weight.semibold, color: c.text },
+    emptySubtext: { ...Type.bodyMd, color: c.textSub },
   });
 }
 

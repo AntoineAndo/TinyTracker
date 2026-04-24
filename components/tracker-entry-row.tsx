@@ -1,8 +1,12 @@
+// Single-row presentation for a tracker: icon block, name + streak, and the
+// right-aligned QuickAction control. Two variants: `card` (standalone with
+// shadow) and `inset` (container-provided, e.g. inside a routine card).
 import { memo, useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View, ViewStyle, StyleProp } from 'react-native';
 
 import { StreakBadge } from '@/components/streak-badge';
 import { CompletedValue, isCompleted, QuickAction } from '@/components/today-tracker-list-action';
+import { Radius, Shadow, Size, Space, Type } from '@/constants/tokens';
 import { isCheckboxControl } from '@/lib/tracker-utils';
 import { AppTheme, useTheme } from '@/hooks/use-theme';
 import { getTrackerColorRgba } from '@/lib/tracker-colors';
@@ -11,19 +15,14 @@ import { Entry, Tracker } from '@/lib/types';
 
 function makeStyles(c: AppTheme) {
   return StyleSheet.create({
-    // Default: standalone card with shadow
     card: {
       flexDirection: 'row',
       alignItems: 'center',
-      paddingVertical: 12,
-      paddingHorizontal: 12,
+      paddingVertical: Space.base,
+      paddingHorizontal: Space.base,
       backgroundColor: c.card,
-      borderRadius: 18,
-      shadowColor: '#000',
-      shadowOpacity: 0.05,
-      shadowRadius: 8,
-      shadowOffset: { width: 0, height: 2 },
-      elevation: 1,
+      borderRadius: Radius.xl,
+      ...Shadow.card,
     },
     // Inset: no bg/shadow — parent row provides the container
     inset: {
@@ -34,16 +33,16 @@ function makeStyles(c: AppTheme) {
     },
     done: { opacity: 0.5 },
     iconContainer: {
-      width: 44, height: 44, borderRadius: 12,
+      width: Size.iconBg, height: Size.iconBg, borderRadius: Radius.md,
       alignItems: 'center', justifyContent: 'center',
-      marginRight: 12, flexShrink: 0,
+      marginRight: Space.base, flexShrink: 0,
     },
     icon: { fontSize: 22 },
     nameContainer: {
       flex: 1, flexDirection: 'row' as const,
-      alignItems: 'center' as const, gap: 6, marginRight: 12,
+      alignItems: 'center' as const, gap: Space.sm, marginRight: Space.base,
     },
-    name: { fontSize: 16, fontWeight: '600', flexShrink: 1 },
+    name: { ...Type.body, flexShrink: 1 },
     nameDone: { color: '' }, // filled inline
     action: { alignItems: 'flex-end' as const },
   });

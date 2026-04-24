@@ -1,9 +1,13 @@
+// Shared form fields + styles used by both New Tracker and Edit Tracker
+// screens. Fields are driven by react-hook-form and conditionally render
+// based on the selected tracker type and frequency.
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useState } from 'react';
 import { Control, Controller, UseFormSetValue } from 'react-hook-form';
 import { Platform, Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 
 import { SegmentControl } from '@/components/segment-control';
+import { Border, Radius, Space, Type, Weight } from '@/constants/tokens';
 import { AppTheme } from '@/hooks/use-theme';
 import { TRACKER_COLOR_ORDER, TRACKER_COLORS } from '@/lib/tracker-colors';
 import { extractEmoji } from '@/lib/tracker-icons';
@@ -39,38 +43,38 @@ function formatTime(hour: number, minute: number): string {
 export function makeFormStyles(c: AppTheme) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: c.background },
-    content: { padding: 20, gap: 24 },
+    content: { padding: Space.xl, gap: Space.section },
     centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
     errorText: { fontSize: 16, color: c.textSub },
-    field: { gap: 8 },
-    label: { fontSize: 13, fontWeight: '600', color: c.textSub, textTransform: 'uppercase', letterSpacing: 0.5 },
-    hint: { fontSize: 12, color: c.textMuted, fontStyle: 'italic' },
+    field: { gap: Space.md },
+    label: { ...Type.fieldLabel, color: c.textSub },
+    hint: { ...Type.caption, color: c.textMuted, fontStyle: 'italic' },
     input: {
-      borderWidth: 1, borderColor: c.border, borderRadius: 10,
-      paddingHorizontal: 14, paddingVertical: 12,
+      borderWidth: Border.hairline, borderColor: c.border, borderRadius: Radius.md,
+      paddingHorizontal: Space.lg, paddingVertical: Space.base,
       fontSize: 16, color: c.text, backgroundColor: c.surface,
     },
-    segment: { flexDirection: 'row', backgroundColor: c.segmentBg, borderRadius: 10, padding: 3, gap: 3 },
-    segmentItem: { flex: 1, paddingVertical: 8, borderRadius: 8, alignItems: 'center' },
+    segment: { flexDirection: 'row', backgroundColor: c.segmentBg, borderRadius: Radius.md, padding: 3, gap: 3 },
+    segmentItem: { flex: 1, paddingVertical: Space.md, borderRadius: Radius.sm, alignItems: 'center' },
     segmentItemActive: {
       backgroundColor: c.segmentActiveBg,
       shadowColor: '#000', shadowOpacity: c.segmentActiveShadowOpacity,
       shadowRadius: 4, shadowOffset: { width: 0, height: 1 }, elevation: 2,
     },
-    segmentText: { fontSize: 14, color: c.textSub, fontWeight: '500' },
-    segmentTextActive: { color: c.text, fontWeight: '600' },
-    stepper: { flexDirection: 'row', alignItems: 'center', gap: 20 },
-    stepBtn: { width: 40, height: 40, borderRadius: 10, borderWidth: 1.5, borderColor: c.border, alignItems: 'center', justifyContent: 'center' },
+    segmentText: { fontSize: 14, color: c.textSub, fontWeight: Weight.medium },
+    segmentTextActive: { color: c.text, fontWeight: Weight.semibold },
+    stepper: { flexDirection: 'row', alignItems: 'center', gap: Space.xl },
+    stepBtn: { width: 40, height: 40, borderRadius: Radius.md, borderWidth: Border.strong, borderColor: c.border, alignItems: 'center', justifyContent: 'center' },
     stepBtnText: { fontSize: 24, color: c.text, lineHeight: 30 },
-    stepValue: { fontSize: 24, fontWeight: '700', color: c.text, minWidth: 36, textAlign: 'center' },
-    minMaxRow: { flexDirection: 'row', gap: 16 },
-    minMaxField: { flex: 1, gap: 8 },
-    colorRow: { flexDirection: 'row', gap: 12 },
-    colorDot: { width: 36, height: 36, borderRadius: 18 },
+    stepValue: { fontSize: 24, fontWeight: Weight.bold, color: c.text, minWidth: 36, textAlign: 'center' },
+    minMaxRow: { flexDirection: 'row', gap: Space.lg },
+    minMaxField: { flex: 1, gap: Space.md },
+    colorRow: { flexDirection: 'row', gap: Space.base },
+    colorDot: { width: 36, height: 36, borderRadius: Radius.lg },
     colorDotSelected: { borderWidth: 3, borderColor: c.text },
-    iconRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+    iconRow: { flexDirection: 'row', alignItems: 'center', gap: Space.lg },
     iconInput: {
-      width: 56, height: 56, borderRadius: 12, borderWidth: 2,
+      width: 56, height: 56, borderRadius: Radius.md, borderWidth: Border.emphasis,
       backgroundColor: c.cardAlt, alignItems: 'center', justifyContent: 'center',
     },
     iconEmoji: { fontSize: 28, textAlign: 'center', width: 52, lineHeight: 36, paddingVertical: 0, includeFontPadding: false },
@@ -79,32 +83,32 @@ export function makeFormStyles(c: AppTheme) {
       width: 18, height: 18, borderRadius: 9,
       backgroundColor: c.textSub, alignItems: 'center', justifyContent: 'center',
     },
-    clearButtonText: { color: c.background, fontSize: 13, lineHeight: 18, fontWeight: '600' },
+    clearButtonText: { color: c.background, fontSize: 13, lineHeight: 18, fontWeight: Weight.semibold },
     iconHint: { flex: 1, fontSize: 13, color: c.textSub, lineHeight: 18 },
-    saveButton: { borderRadius: 12, paddingVertical: 15, alignItems: 'center', marginTop: 8 },
+    saveButton: { borderRadius: Radius.md, paddingVertical: Space.lg, alignItems: 'center', marginTop: Space.md },
     saveButtonDisabled: { opacity: 0.4 },
-    saveButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+    saveButtonText: { color: '#fff', fontSize: 16, fontWeight: Weight.semibold },
     deleteButton: {
-      borderRadius: 12, paddingVertical: 15, alignItems: 'center',
-      borderWidth: 1.5, borderColor: '#ef4444',
+      borderRadius: Radius.md, paddingVertical: Space.lg, alignItems: 'center',
+      borderWidth: Border.strong, borderColor: '#ef4444',
     },
-    deleteButtonText: { color: '#ef4444', fontSize: 16, fontWeight: '600' },
+    deleteButtonText: { color: '#ef4444', fontSize: 16, fontWeight: Weight.semibold },
     // Reminder styles
     reminderToggleRow: {
       flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     },
-    reminderToggleLabel: { fontSize: 15, fontWeight: '600', color: c.text },
-    dayRow: { flexDirection: 'row', gap: 6 },
+    reminderToggleLabel: { ...Type.bodyMd, color: c.text },
+    dayRow: { flexDirection: 'row', gap: Space.sm },
     dayPill: {
-      flex: 1, paddingVertical: 9, borderRadius: 8,
+      flex: 1, paddingVertical: 9, borderRadius: Radius.sm,
       alignItems: 'center', backgroundColor: c.segmentBg,
     },
     dayPillActive: { backgroundColor: c.segmentActiveBg },
-    dayPillText: { fontSize: 12, fontWeight: '600', color: c.textSub },
+    dayPillText: { ...Type.caption, color: c.textSub },
     dayPillTextActive: { color: c.text },
     timeButton: {
-      borderWidth: 1, borderColor: c.border, borderRadius: 10,
-      paddingHorizontal: 14, paddingVertical: 12,
+      borderWidth: Border.hairline, borderColor: c.border, borderRadius: Radius.md,
+      paddingHorizontal: Space.lg, paddingVertical: Space.base,
       backgroundColor: c.surface,
       flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     },

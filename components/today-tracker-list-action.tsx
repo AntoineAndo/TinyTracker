@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 
 import { AnimatedButton } from '@/components/animated-button';
+import { Border, Radius, Size, Space, Weight } from '@/constants/tokens';
 import { AppTheme, useTheme } from '@/hooks/use-theme';
 import { getTrackerColorHex } from '@/lib/tracker-colors';
 import { isCheckboxControl, isCompleted, wouldComplete } from '@/lib/tracker-utils';
@@ -12,47 +13,46 @@ import { toNumericValue } from '@/lib/utils';
 
 export { isCompleted, wouldComplete };
 
-// Checkbox dimensions shared between the style and the SVG icon.
-const CHECKBOX_SIZE = 34;
-const CHECKBOX_RADIUS = 9;
+// Checkbox dimensions shared between the style and the SVG icon. The icon is
+// ~half the container so the tap target stays generous around a compact glyph.
 const CHECKBOX_ICON_SIZE = 18;
 
 function makeStyles(c: AppTheme) {
   return StyleSheet.create({
-    boolBtn: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 10, borderWidth: 1.5, borderColor: c.border },
-    boolBtnText: { fontSize: 14, fontWeight: '600', color: c.textSub },
+    boolBtn: { paddingHorizontal: Space.lg, paddingVertical: Space.sm, borderRadius: Radius.md, borderWidth: Border.strong, borderColor: c.border },
+    boolBtnText: { fontSize: 14, fontWeight: Weight.semibold, color: c.textSub },
     boolBtnTextActive: { color: '#fff' },
-    countRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-    countProgress: { fontSize: 14, fontWeight: '600', color: c.textSub },
-    countBtn: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 10 },
-    countBtnText: { fontSize: 14, fontWeight: '700', color: '#fff' },
-    rangeRow: { flexDirection: 'row', gap: 4 },
-    rangeBtn: { width: 32, height: 32, borderRadius: 8, borderWidth: 1.5, borderColor: c.border, alignItems: 'center', justifyContent: 'center' },
-    rangeBtnText: { fontSize: 13, fontWeight: '600', color: c.textSub },
+    countRow: { flexDirection: 'row', alignItems: 'center', gap: Space.base },
+    countProgress: { fontSize: 14, fontWeight: Weight.semibold, color: c.textSub },
+    countBtn: { paddingHorizontal: Space.lg, paddingVertical: Space.sm, borderRadius: Radius.md },
+    countBtnText: { fontSize: 14, fontWeight: Weight.bold, color: '#fff' },
+    rangeRow: { flexDirection: 'row', gap: Space.xs },
+    rangeBtn: { width: Size.iconBgSm, height: Size.iconBgSm, borderRadius: Radius.sm, borderWidth: Border.strong, borderColor: c.border, alignItems: 'center', justifyContent: 'center' },
+    rangeBtnText: { fontSize: 13, fontWeight: Weight.semibold, color: c.textSub },
     rangeBtnTextActive: { color: '#fff' },
-    logRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-    logTotal: { fontSize: 14, fontWeight: '600', color: c.textSub, minWidth: 36, textAlign: 'right' },
-    logAddBtn: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10, borderWidth: 1.5 },
-    logAddBtnText: { fontSize: 14, fontWeight: '600' },
-    logDoneBtn: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10 },
-    logDoneBtnText: { fontSize: 14, fontWeight: '700', color: '#fff' },
-    logInputRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    logRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
+    logTotal: { fontSize: 14, fontWeight: Weight.semibold, color: c.textSub, minWidth: 36, textAlign: 'right' },
+    logAddBtn: { paddingHorizontal: Space.base, paddingVertical: Space.sm, borderRadius: Radius.md, borderWidth: Border.strong },
+    logAddBtnText: { fontSize: 14, fontWeight: Weight.semibold },
+    logDoneBtn: { paddingHorizontal: Space.base, paddingVertical: Space.sm, borderRadius: Radius.md },
+    logDoneBtnText: { fontSize: 14, fontWeight: Weight.bold, color: '#fff' },
+    logInputRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
     logInput: {
-      width: 80, paddingVertical: 6, paddingHorizontal: 10,
-      borderWidth: 1.5, borderRadius: 10,
+      width: 80, paddingVertical: Space.sm, paddingHorizontal: Space.base,
+      borderWidth: Border.strong, borderRadius: Radius.md,
       fontSize: 14, textAlign: 'right',
       color: c.text, backgroundColor: c.surface,
     },
-    logConfirmBtn: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-    logConfirmBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-    completedValue: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-    completedCheck: { fontSize: 15, fontWeight: '700' },
-    completedLabel: { fontSize: 15, fontWeight: '600' },
+    logConfirmBtn: { width: Size.checkbox, height: Size.checkbox, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center' },
+    logConfirmBtnText: { color: '#fff', fontSize: 16, fontWeight: Weight.bold },
+    completedValue: { flexDirection: 'row', alignItems: 'center', gap: Space.xs },
+    completedCheck: { fontSize: 15, fontWeight: Weight.bold },
+    completedLabel: { fontSize: 15, fontWeight: Weight.semibold },
     checkboxBtn: {
-      width: CHECKBOX_SIZE, height: CHECKBOX_SIZE, borderRadius: CHECKBOX_RADIUS,
+      width: Size.checkbox, height: Size.checkbox, borderRadius: Radius.sm,
       alignItems: 'center', justifyContent: 'center',
     },
-    checkboxIdle: { borderWidth: 1.5, borderColor: c.border },
+    checkboxIdle: { borderWidth: Border.strong, borderColor: c.border },
   });
 }
 

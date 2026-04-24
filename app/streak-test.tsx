@@ -1,9 +1,12 @@
+// Dev-only screen to sanity-check the streak badge animations by bumping
+// a counter up and down.
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
 import { AnimatedButton } from '@/components/animated-button';
 import { StreakBadge } from '@/components/streak-badge';
+import { Radius, Space, Type, Weight } from '@/constants/tokens';
 import { useTheme } from '@/hooks/use-theme';
 
 export default function StreakTestScreen() {
@@ -53,27 +56,27 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: 60,
-    paddingBottom: 16,
+    paddingHorizontal: Space.lg,
+    paddingTop: Space.screenTop,
+    paddingBottom: Space.lg,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   back: { width: 80 },
   backText: { fontSize: 16 },
-  title: { fontSize: 18, fontWeight: '700' },
-  body: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 32, padding: 32 },
+  title: { fontSize: 18, fontWeight: Weight.bold },
+  body: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Space['2xl'], padding: Space['2xl'] },
   card: {
     width: '100%',
     alignItems: 'center',
-    gap: 12,
-    padding: 32,
-    borderRadius: 16,
+    gap: Space.base,
+    padding: Space['2xl'],
+    borderRadius: Radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
   },
-  label: { fontSize: 13, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
+  label: { ...Type.fieldLabel },
   badgeRow: { justifyContent: 'center' },
   zero: { fontSize: 20 },
-  buttons: { flexDirection: 'row', gap: 12 },
-  btn: { paddingHorizontal: 32, paddingVertical: 14, borderRadius: 12 },
-  btnText: { fontSize: 16, fontWeight: '700', color: '#fff' },
+  buttons: { flexDirection: 'row', gap: Space.base },
+  btn: { paddingHorizontal: Space['2xl'], paddingVertical: Space.lg, borderRadius: Radius.md },
+  btnText: { fontSize: 16, fontWeight: Weight.bold, color: '#fff' },
 });

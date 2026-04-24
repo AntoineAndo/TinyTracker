@@ -4,6 +4,7 @@ import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { TrackerEntryRow } from '@/components/tracker-entry-row';
+import { Border, Radius, Space, Type } from '@/constants/tokens';
 import { AppTheme, useTheme } from '@/hooks/use-theme';
 import { isCompleted } from '@/lib/tracker-utils';
 import { Entry, Routine, Tracker } from '@/lib/types';
@@ -41,42 +42,42 @@ function makeStyles(c: AppTheme) {
 
   return StyleSheet.create({
     card: {
-      marginHorizontal: 16,
-      marginBottom: 8,
-      borderRadius: 22,
-      borderWidth: 1,
+      marginHorizontal: Space.lg,
+      marginBottom: Space.md,
+      borderRadius: Radius.xl,
+      borderWidth: Border.hairline,
       borderColor,
       overflow: 'hidden',
       shadowColor: '#FFA34F',
       elevation: 5,
     },
     cardInner: {
-      padding: 16,
+      padding: Space.lg,
     },
     header: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 12,
-      marginBottom: 12,
+      gap: Space.base,
+      marginBottom: Space.base,
     },
     emoji: { fontSize: 26 },
     headerText: { flex: 1 },
-    title: { fontSize: 17, fontWeight: '700', color: c.text },
-    subtitle: { fontSize: 12, fontWeight: '600', color: c.textSub, marginTop: 2 },
+    title: { ...Type.h2, color: c.text },
+    subtitle: { ...Type.caption, color: c.textSub, marginTop: 2 },
     markAllBtn: {
       backgroundColor: c.text,
-      paddingHorizontal: 14,
-      paddingVertical: 8,
-      borderRadius: 999,
+      paddingHorizontal: Space.lg,
+      paddingVertical: Space.md,
+      borderRadius: Radius.pill,
     },
-    markAllBtnText: { color: c.background, fontSize: 12, fontWeight: '700' },
+    markAllBtnText: { ...Type.caption, fontWeight: '700', color: c.background },
     allDoneText: { fontSize: 13, fontWeight: '700', color: '#22c55e' },
-    rows: { gap: 8 },
+    rows: { gap: Space.md },
     row: {
       backgroundColor: rowBg,
-      borderRadius: 16,
-      paddingHorizontal: 12,
-      paddingVertical: 10,
+      borderRadius: Radius.lg,
+      paddingHorizontal: Space.base,
+      paddingVertical: Space.base,
     },
   });
 }

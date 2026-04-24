@@ -1,7 +1,10 @@
+// Scrolling list of tracker rows with enter/exit animations and a rebound
+// effect for siblings when a row completes and dismisses.
 import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, ScrollView, View } from 'react-native';
 
 import { TrackerEntryRow } from '@/components/tracker-entry-row';
+import { Motion } from '@/constants/tokens';
 import { useAnimationsEnabled } from '@/hooks/use-animations-enabled';
 import { useTheme } from '@/hooks/use-theme';
 import { Entry, Tracker } from '@/lib/types';
@@ -50,8 +53,8 @@ function AnimatedRow({ children, exiting, onExited, animationsEnabled, rebound }
   useEffect(() => {
     if (!fixedHeight) return;
     Animated.parallel([
-      Animated.timing(opacityAnim, { toValue: 0, duration: 200, useNativeDriver: false }),
-      Animated.timing(heightAnim, { toValue: 0, duration: 280, useNativeDriver: false }),
+      Animated.timing(opacityAnim, { toValue: 0, duration: Motion.base, useNativeDriver: false }),
+      Animated.timing(heightAnim, { toValue: 0, duration: Motion.slow, useNativeDriver: false }),
     ]).start(() => onExitedRef.current());
   }, [fixedHeight, heightAnim, opacityAnim]);
 
@@ -61,7 +64,7 @@ function AnimatedRow({ children, exiting, onExited, animationsEnabled, rebound }
     if (!animationsEnabled) return;
     const timeout = setTimeout(() => {
       Animated.sequence([
-        Animated.timing(springAnim, { toValue: -9, duration: 90, useNativeDriver: true }),
+        Animated.timing(springAnim, { toValue: -9, duration: Motion.fast, useNativeDriver: true }),
         Animated.spring(springAnim, { toValue: 0, useNativeDriver: true, stiffness: STIFFNESS, damping: DAMPING, mass: MASS }),
       ]).start();
     }, rebound.delay);

@@ -1,3 +1,5 @@
+// Tracker detail screen: today's primary input (ring for count, input for
+// log, buttons for boolean/range) plus a paginated history list.
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -5,6 +7,7 @@ import Svg, { Circle } from 'react-native-svg';
 
 import { AnimatedButton } from '@/components/animated-button';
 import { EditEntryDrawer } from '@/components/edit-entry-drawer';
+import { Border, Radius, Shadow, Space, Type, Weight } from '@/constants/tokens';
 import { useTrackers } from '@/context/trackers-context';
 import { useAnimationsEnabled } from '@/hooks/use-animations-enabled';
 import { AppTheme, useTheme } from '@/hooks/use-theme';
@@ -203,49 +206,48 @@ function makeStyles(c: AppTheme) {
     centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
     errorText: { fontSize: 16, color: c.textSub },
     inputSection: {
-      padding: 20, gap: 16,
+      padding: Space.xl, gap: Space.lg,
       borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.border,
     },
-    inputLabel: { fontSize: 16, fontWeight: '600', color: c.text },
-    alreadyLogged: { borderWidth: 1.5, borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
-    alreadyLoggedText: { fontSize: 15, fontWeight: '600' },
-    boolRow: { flexDirection: 'row', gap: 12 },
+    inputLabel: { ...Type.body, color: c.text },
+    alreadyLogged: { borderWidth: Border.strong, borderRadius: Radius.md, paddingVertical: Space.lg, alignItems: 'center' },
+    alreadyLoggedText: { ...Type.bodyMd },
+    boolRow: { flexDirection: 'row', gap: Space.base },
     boolButton: {
-      flex: 1, paddingVertical: 14, borderRadius: 12,
-      borderWidth: 2, borderColor: c.border, alignItems: 'center',
+      flex: 1, paddingVertical: Space.lg, borderRadius: Radius.md,
+      borderWidth: Border.emphasis, borderColor: c.border, alignItems: 'center',
     },
-    boolButtonText: { fontSize: 16, fontWeight: '600', color: c.textSub },
-    rangeRow: { flexDirection: 'row', gap: 10 },
+    boolButtonText: { ...Type.body, color: c.textSub },
+    rangeRow: { flexDirection: 'row', gap: Space.base },
     rangeButton: {
-      flex: 1, aspectRatio: 1, borderRadius: 12,
-      borderWidth: 2, borderColor: c.border,
+      flex: 1, aspectRatio: 1, borderRadius: Radius.md,
+      borderWidth: Border.emphasis, borderColor: c.border,
       alignItems: 'center', justifyContent: 'center',
     },
-    rangeButtonText: { fontSize: 18, fontWeight: '700', color: c.textSub },
+    rangeButtonText: { fontSize: 18, fontWeight: Weight.bold, color: c.textSub },
     rangeButtonTextActive: { color: '#fff' },
-    saveButton: { borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
+    saveButton: { borderRadius: Radius.md, paddingVertical: Space.lg, alignItems: 'center' },
     saveButtonDisabled: { opacity: 0.4 },
-    saveButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+    saveButtonText: { ...Type.body, color: '#fff' },
     historyTitle: {
-      fontSize: 16, fontWeight: '700', color: c.textSub,
-      textTransform: 'uppercase', letterSpacing: 0.5,
-      paddingHorizontal: 20, paddingTop: 20, paddingBottom: 8,
+      ...Type.label, fontSize: 16, color: c.textSub,
+      paddingHorizontal: Space.xl, paddingTop: Space.xl, paddingBottom: Space.md,
     },
-    historyList: { paddingHorizontal: 20 },
-    noEntries: { paddingHorizontal: 20, fontSize: 14, color: c.textMuted },
-    loadMoreBtn: { paddingVertical: 16, alignItems: 'center' as const },
-    loadMoreText: { fontSize: 15, color: c.tint, fontWeight: '500' as const },
+    historyList: { paddingHorizontal: Space.xl },
+    noEntries: { paddingHorizontal: Space.xl, fontSize: 14, color: c.textMuted },
+    loadMoreBtn: { paddingVertical: Space.lg, alignItems: 'center' as const },
+    loadMoreText: { fontSize: 15, color: c.tint, fontWeight: Weight.medium },
     entryRow: {
       flexDirection: 'row', alignItems: 'center',
-      paddingVertical: 12,
+      paddingVertical: Space.base,
       borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.borderLight,
-      gap: 10,
+      gap: Space.base,
     },
     entryDate: { flex: 1, fontSize: 15, color: c.textSub },
     entryArrow: { fontSize: 14, color: c.textMuted },
-    entryValue: { fontSize: 16, fontWeight: '600', minWidth: 36, textAlign: 'right' },
-    entryChevron: { fontSize: 20, color: c.textMuted, marginLeft: 4 },
-    editButton: { fontSize: 16, color: c.tint, fontWeight: '500' },
+    entryValue: { ...Type.body, minWidth: 36, textAlign: 'right' },
+    entryChevron: { fontSize: 20, color: c.textMuted, marginLeft: Space.xs },
+    editButton: { fontSize: 16, color: c.tint, fontWeight: Weight.medium },
   });
 }
 
@@ -449,42 +451,41 @@ export default function TrackerDetailScreen() {
 // ── Static styles (layout only, no colors) ─────────────────────────────────────
 
 const countStyles = StyleSheet.create({
-  container: { alignItems: 'center', gap: 12, paddingVertical: 8 },
+  container: { alignItems: 'center', gap: Space.base, paddingVertical: Space.md },
   ringWrapper: { width: RING_SIZE, height: RING_SIZE, alignItems: 'center', justifyContent: 'center' },
   btn: {
     width: BTN_SIZE, height: BTN_SIZE, borderRadius: BTN_SIZE / 2,
     alignItems: 'center', justifyContent: 'center',
-    shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 12, shadowOffset: { width: 0, height: 4 },
-    elevation: 6,
+    ...Shadow.popover,
   },
-  btnText: { color: '#fff', fontSize: 28, fontWeight: '700' },
+  btnText: { color: '#fff', fontSize: 28, fontWeight: Weight.bold },
   labelRow: { alignItems: 'center' },
   countNum: { fontSize: 28, fontWeight: '800' },
-  countTarget: { fontSize: 20, fontWeight: '500' },
+  countTarget: { fontSize: 20, fontWeight: Weight.medium },
 });
 
 const logStyles = StyleSheet.create({
-  container: { alignItems: 'center', gap: 20, paddingVertical: 12 },
-  totalWrapper: { alignItems: 'center', gap: 4 },
-  checkmark: { fontSize: 20, fontWeight: '700' },
+  container: { alignItems: 'center', gap: Space.xl, paddingVertical: Space.base },
+  totalWrapper: { alignItems: 'center', gap: Space.xs },
+  checkmark: { fontSize: 20, fontWeight: Weight.bold },
   total: { fontSize: 56, fontWeight: '800', lineHeight: 64 },
-  reference: { fontSize: 13, fontWeight: '500' },
-  inputRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  reference: { fontSize: 13, fontWeight: Weight.medium },
+  inputRow: { flexDirection: 'row', alignItems: 'center', gap: Space.base },
   input: {
-    width: 130, paddingVertical: 12, paddingHorizontal: 16,
-    borderWidth: 2, borderRadius: 14,
-    fontSize: 22, fontWeight: '700', textAlign: 'center',
+    width: 130, paddingVertical: Space.base, paddingHorizontal: Space.lg,
+    borderWidth: Border.emphasis, borderRadius: Radius.md,
+    fontSize: 22, fontWeight: Weight.bold, textAlign: 'center',
   },
   confirmBtn: {
-    width: 48, height: 48, borderRadius: 14,
+    width: 48, height: 48, borderRadius: Radius.md,
     alignItems: 'center', justifyContent: 'center',
     shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 3 },
     elevation: 4,
   },
-  confirmBtnText: { color: '#fff', fontSize: 20, fontWeight: '700' },
-  actionsRow: { flexDirection: 'row', gap: 12 },
-  addBtn: { paddingHorizontal: 28, paddingVertical: 14, borderRadius: 14, borderWidth: 2 },
-  addBtnText: { fontSize: 16, fontWeight: '700' },
-  doneBtn: { paddingHorizontal: 28, paddingVertical: 14, borderRadius: 14 },
-  doneBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  confirmBtnText: { color: '#fff', fontSize: 20, fontWeight: Weight.bold },
+  actionsRow: { flexDirection: 'row', gap: Space.base },
+  addBtn: { paddingHorizontal: Space['2xl'], paddingVertical: Space.lg, borderRadius: Radius.md, borderWidth: Border.emphasis },
+  addBtnText: { fontSize: 16, fontWeight: Weight.bold },
+  doneBtn: { paddingHorizontal: Space['2xl'], paddingVertical: Space.lg, borderRadius: Radius.md },
+  doneBtnText: { color: '#fff', fontSize: 16, fontWeight: Weight.bold },
 });

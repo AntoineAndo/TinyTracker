@@ -4,6 +4,7 @@ import { useCallback, useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { RoutineCard } from '@/components/routine-card';
+import { Space } from '@/constants/tokens';
 import { useRoutines } from '@/context/routines-context';
 import { useTrackers } from '@/context/trackers-context';
 import { toRoutineDayOfWeek } from '@/lib/dates';
@@ -11,7 +12,7 @@ import { isRoutineActive } from '@/lib/tracker-utils';
 import { Tracker } from '@/lib/types';
 
 const styles = StyleSheet.create({
-  container: { paddingTop: 4 },
+  container: { paddingTop: Space.xs },
 });
 
 type TodayRoutineListProps = {

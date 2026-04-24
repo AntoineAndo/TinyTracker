@@ -1,8 +1,11 @@
+// Example modal route, retained from Expo Router template. Not part of
+// the main navigation flow but reachable via the default modal stack.
 import { Link } from 'expo-router';
 import { StyleSheet } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { Space } from '@/constants/tokens';
 
 export default function ModalScreen() {
   return (
@@ -20,10 +23,10 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 20,
+    padding: Space.xl,
   },
   link: {
-    marginTop: 15,
-    paddingVertical: 15,
+    marginTop: Space.lg,
+    paddingVertical: Space.lg,
   },
 });

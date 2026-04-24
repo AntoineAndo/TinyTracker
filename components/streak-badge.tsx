@@ -1,11 +1,13 @@
+// Flame + number badge that animates on streak change: first appearance pops
+// from scale 0 and subsequent increments slide the number up with a flame pulse.
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, StyleSheet, View } from 'react-native';
 
+import { Motion, Weight } from '@/constants/tokens';
 import { useAnimationsEnabled } from '@/hooks/use-animations-enabled';
 import { useTheme } from '@/hooks/use-theme';
 
 const SPRING = { useNativeDriver: true, damping: 30, stiffness: 1000 } as const;
-const SLIDE_DURATION = 300;
 
 export function StreakBadge({ streak, fontSize = 13 }: { streak: number; fontSize?: number }) {
   const c = useTheme();
@@ -43,7 +45,7 @@ export function StreakBadge({ streak, fontSize = 13 }: { streak: number; fontSiz
         slideAnim.setValue(0);
         Animated.timing(slideAnim, {
           toValue: 1,
-          duration: SLIDE_DURATION,
+          duration: Motion.slow,
           easing: Easing.out(Easing.cubic),
           useNativeDriver: true,
         }).start(() => {
@@ -58,7 +60,7 @@ export function StreakBadge({ streak, fontSize = 13 }: { streak: number; fontSiz
 
   if (displayStreak === 0) return null;
 
-  const textStyle = { fontSize, fontWeight: '600' as const, color: c.textSub };
+  const textStyle = { fontSize, fontWeight: Weight.semibold, color: c.textSub };
 
   const currentTranslate = slideAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -slideOffset] });
   const nextTranslate = slideAnim.interpolate({ inputRange: [0, 1], outputRange: [slideOffset, 0] });

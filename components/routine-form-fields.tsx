@@ -1,8 +1,12 @@
+// Shared form fields + styles for creating/editing a routine: name, tracker
+// picker with per-routine target overrides, active days, time window, and
+// a reminder toggle.
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useState } from 'react';
 import { Control, Controller, UseFormSetValue } from 'react-hook-form';
 import { Platform, Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 
+import { Border, Radius, Space, Type, Weight } from '@/constants/tokens';
 import { AppTheme } from '@/hooks/use-theme';
 import { RoutineTracker, Tracker } from '@/lib/types';
 
@@ -30,76 +34,76 @@ function formatTime(hour: number, minute: number): string {
 export function makeRoutineFormStyles(c: AppTheme) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: c.background },
-    content: { padding: 20, gap: 24, paddingBottom: 60 },
-    field: { gap: 8 },
-    label: { fontSize: 13, fontWeight: '600', color: c.textSub, textTransform: 'uppercase', letterSpacing: 0.5 },
+    content: { padding: Space.xl, gap: Space.section, paddingBottom: Space.screenTop },
+    field: { gap: Space.md },
+    label: { ...Type.fieldLabel, color: c.textSub },
     input: {
-      borderWidth: 1, borderColor: c.border, borderRadius: 10,
-      paddingHorizontal: 14, paddingVertical: 12,
+      borderWidth: Border.hairline, borderColor: c.border, borderRadius: Radius.md,
+      paddingHorizontal: Space.lg, paddingVertical: Space.base,
       fontSize: 16, color: c.text, backgroundColor: c.surface,
     },
-    dayRow: { flexDirection: 'row', gap: 6 },
+    dayRow: { flexDirection: 'row', gap: Space.sm },
     dayPill: {
-      flex: 1, paddingVertical: 9, borderRadius: 8,
+      flex: 1, paddingVertical: 9, borderRadius: Radius.sm,
       alignItems: 'center', backgroundColor: c.segmentBg,
     },
     dayPillActive: { backgroundColor: c.segmentActiveBg },
-    dayPillText: { fontSize: 12, fontWeight: '600', color: c.textSub },
+    dayPillText: { ...Type.caption, color: c.textSub },
     dayPillTextActive: { color: c.text },
     timeButton: {
-      borderWidth: 1, borderColor: c.border, borderRadius: 10,
-      paddingHorizontal: 14, paddingVertical: 12,
+      borderWidth: Border.hairline, borderColor: c.border, borderRadius: Radius.md,
+      paddingHorizontal: Space.lg, paddingVertical: Space.base,
       backgroundColor: c.surface,
       flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     },
     timeButtonText: { fontSize: 16, color: c.text },
     timeChevron: { fontSize: 14, color: c.textSub },
-    timeRow: { flexDirection: 'row', gap: 12 },
-    timeField: { flex: 1, gap: 8 },
+    timeRow: { flexDirection: 'row', gap: Space.base },
+    timeField: { flex: 1, gap: Space.md },
     reminderToggleRow: {
       flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     },
-    reminderToggleLabel: { fontSize: 15, fontWeight: '600', color: c.text },
-    trackerList: { gap: 8 },
+    reminderToggleLabel: { ...Type.bodyMd, color: c.text },
+    trackerList: { gap: Space.md },
     trackerRow: {
-      backgroundColor: c.cardAlt, borderRadius: 10,
-      paddingHorizontal: 14, paddingTop: 12, paddingBottom: 12,
-      gap: 8,
+      backgroundColor: c.cardAlt, borderRadius: Radius.md,
+      paddingHorizontal: Space.lg, paddingTop: Space.base, paddingBottom: Space.base,
+      gap: Space.md,
     },
-    trackerRowSelected: { borderWidth: 1.5, borderColor: c.tint },
-    trackerMain: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    trackerRowSelected: { borderWidth: Border.strong, borderColor: c.tint },
+    trackerMain: { flexDirection: 'row', alignItems: 'center', gap: Space.base },
     trackerName: { flex: 1, fontSize: 15, color: c.text },
     checkbox: {
       width: 22, height: 22, borderRadius: 6,
-      borderWidth: 1.5, borderColor: c.border,
+      borderWidth: Border.strong, borderColor: c.border,
       alignItems: 'center', justifyContent: 'center',
     },
     checkboxSelected: { backgroundColor: c.tint, borderColor: c.tint },
-    checkmark: { color: '#fff', fontSize: 13, fontWeight: '700' },
+    checkmark: { color: '#fff', fontSize: 13, fontWeight: Weight.bold },
     // Routine target stepper (shown for selected count trackers)
     targetRow: {
       flexDirection: 'row', alignItems: 'center',
-      paddingTop: 4, gap: 8,
+      paddingTop: Space.xs, gap: Space.md,
     },
     targetLabel: { fontSize: 12, color: c.textSub, flex: 1 },
-    targetStepper: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    targetStepper: { flexDirection: 'row', alignItems: 'center', gap: Space.md },
     targetBtn: {
-      width: 28, height: 28, borderRadius: 8,
-      borderWidth: 1.5, borderColor: c.border,
+      width: 28, height: 28, borderRadius: Radius.sm,
+      borderWidth: Border.strong, borderColor: c.border,
       alignItems: 'center', justifyContent: 'center',
     },
     targetBtnText: { fontSize: 16, color: c.text, lineHeight: 20 },
-    targetValue: { fontSize: 15, fontWeight: '600', color: c.text, minWidth: 28, textAlign: 'center' },
+    targetValue: { fontSize: 15, fontWeight: Weight.semibold, color: c.text, minWidth: 28, textAlign: 'center' },
     targetFraction: { fontSize: 12, color: c.textSub },
-    emptyTrackers: { fontSize: 14, color: c.textSub, fontStyle: 'italic', textAlign: 'center', paddingVertical: 8 },
-    saveButton: { borderRadius: 12, paddingVertical: 15, alignItems: 'center', marginTop: 8 },
+    emptyTrackers: { fontSize: 14, color: c.textSub, fontStyle: 'italic', textAlign: 'center', paddingVertical: Space.md },
+    saveButton: { borderRadius: Radius.md, paddingVertical: Space.lg, alignItems: 'center', marginTop: Space.md },
     saveButtonDisabled: { opacity: 0.4 },
-    saveButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+    saveButtonText: { color: '#fff', fontSize: 16, fontWeight: Weight.semibold },
     deleteButton: {
-      borderRadius: 12, paddingVertical: 15, alignItems: 'center',
-      borderWidth: 1.5, borderColor: '#ef4444',
+      borderRadius: Radius.md, paddingVertical: Space.lg, alignItems: 'center',
+      borderWidth: Border.strong, borderColor: '#ef4444',
     },
-    deleteButtonText: { color: '#ef4444', fontSize: 16, fontWeight: '600' },
+    deleteButtonText: { color: '#ef4444', fontSize: 16, fontWeight: Weight.semibold },
     errorText: { fontSize: 12, color: '#ef4444', marginTop: 2 },
   });
 }
