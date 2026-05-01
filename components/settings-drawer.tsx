@@ -3,7 +3,7 @@
 // in the custom tab bar.
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Animated, Modal, Pressable, ScrollView,
+  Animated, KeyboardAvoidingView, Modal, PanResponder, Platform, Pressable, ScrollView,
   StyleSheet, Switch, Text, TextInput, useWindowDimensions, View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -30,6 +30,11 @@ const THEME_OPTIONS: { value: ThemeSetting; label: string }[] = [
 
 const DAY_START_MIN = -12;
 const DAY_START_MAX = 11;
+
+// Pull-to-dismiss gesture thresholds
+const DISMISS_DISTANCE = 100;
+const DISMISS_VELOCITY = 0.5;
+const PAN_SPRING = { useNativeDriver: true, stiffness: 400, damping: 35 } as const;
 
 // Soft icon background colors — work in both light and dark themes
 const IB = {
@@ -220,7 +225,7 @@ function makeStyles(c: AppTheme, screenHeight: number) {
     handle: {
       alignItems: 'center',
       paddingTop: Space.lg,
-      paddingBottom: Space.xs,
+      paddingBottom: Space.md,
       flexShrink: 0,
     },
     handleBar: {
@@ -312,6 +317,53 @@ function makeStyles(c: AppTheme, screenHeight: number) {
   });
 }
 
+// ── NameField — inline text input with a focus-triggered Done button ──────────
+
+// Separate component so focus state doesn't cause the whole drawer to re-render.
+function NameField() {
+  const c = useTheme();
+  const { userName, setUserName } = useSettings();
+  const inputRef = useRef<TextInput>(null);
+  const [focused, setFocused] = useState(false);
+
+  function handleDone() {
+    inputRef.current?.blur();
+  }
+
+  return (
+    <SettingRow icon="🙂" iconBg={IB.gold} title="Your name">
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: Space.sm }}>
+        <TextInput
+          ref={inputRef}
+          value={userName}
+          onChangeText={setUserName}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          onSubmitEditing={handleDone}
+          placeholder="Name"
+          placeholderTextColor={c.textMuted}
+          style={{ ...Type.bodyMd, color: c.text, textAlign: 'right', minWidth: 80 }}
+          maxLength={30}
+          returnKeyType="done"
+        />
+        {focused && (
+          <Pressable
+            onPress={handleDone}
+            style={{
+              backgroundColor: c.tint,
+              borderRadius: Radius.pill,
+              paddingHorizontal: Space.base,
+              paddingVertical: Space.xs + 1,
+            }}
+          >
+            <Text style={{ fontSize: 12, fontWeight: Weight.bold, color: '#fff' }}>Done</Text>
+          </Pressable>
+        )}
+      </View>
+    </SettingRow>
+  );
+}
+
 // ── SettingsDrawer ────────────────────────────────────────────────────────────
 
 type Props = { visible: boolean; onClose: () => void };
@@ -330,7 +382,6 @@ export function SettingsDrawer({ visible, onClose }: Props) {
     reminderEnabled, setReminderEnabled,
     reminderHour, setReminderHour,
     graphShowValues, setGraphShowValues,
-    userName, setUserName,
   } = useSettings();
 
   const slideAnim = useRef(new Animated.Value(screenHeight)).current;
@@ -338,6 +389,30 @@ export function SettingsDrawer({ visible, onClose }: Props) {
   const [modalVisible, setModalVisible] = useState(false);
 
   const pageAnim = useRef(new Animated.Value(0)).current;
+
+  // panY tracks the downward drag offset so the sheet follows the user's finger.
+  // It adds on top of slideAnim so open/close animations and the drag compose cleanly.
+  const panY = useRef(new Animated.Value(0)).current;
+  const panResponder = useRef(PanResponder.create({
+    // Only claim the responder once movement intent is clear — keeps taps on the handle free.
+    onStartShouldSetPanResponder: () => false,
+    onMoveShouldSetPanResponder: (_, gs) => gs.dy > 2,
+    onPanResponderMove: (_, gs) => {
+      if (gs.dy > 0) panY.setValue(gs.dy);
+    },
+    onPanResponderRelease: (_, gs) => {
+      if (gs.dy > DISMISS_DISTANCE || gs.vy > DISMISS_VELOCITY) {
+        // Leave panY at the release position so the sheet exits from where the finger lifted.
+        // panY is zeroed in the visible=true branch on next open.
+        onClose();
+      } else {
+        Animated.spring(panY, { toValue: 0, ...PAN_SPRING }).start();
+      }
+    },
+    onPanResponderTerminate: () => {
+      Animated.spring(panY, { toValue: 0, ...PAN_SPRING }).start();
+    },
+  })).current;
   const mainX = pageAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -screenWidth] });
   const appearanceX = pageAnim.interpolate({ inputRange: [0, 1], outputRange: [screenWidth, 0] });
 
@@ -354,6 +429,7 @@ export function SettingsDrawer({ visible, onClose }: Props) {
   useEffect(() => {
     if (visible) {
       setModalVisible(true);
+      panY.setValue(0);
       if (!animationsEnabled) {
         slideAnim.setValue(0);
         backdropAnim.setValue(1);
@@ -364,8 +440,11 @@ export function SettingsDrawer({ visible, onClose }: Props) {
         ]).start();
       }
     } else {
+      // Cancel any in-flight spring-back so it doesn't compose with the slide-out.
+      panY.stopAnimation();
       const reset = setTimeout(() => pageAnim.setValue(0), 320);
       if (!animationsEnabled) {
+        panY.setValue(0);
         slideAnim.setValue(screenHeight);
         backdropAnim.setValue(0);
         setModalVisible(false);
@@ -375,11 +454,11 @@ export function SettingsDrawer({ visible, onClose }: Props) {
         Animated.parallel([
           Animated.timing(slideAnim, { toValue: screenHeight, duration: Motion.slow, useNativeDriver: true }),
           Animated.timing(backdropAnim, { toValue: 0, duration: Motion.base, useNativeDriver: true }),
-        ]).start(() => setModalVisible(false));
+        ]).start(() => { panY.setValue(0); setModalVisible(false); });
       }
       return () => clearTimeout(reset);
     }
-  }, [visible, animationsEnabled, slideAnim, backdropAnim, pageAnim]);
+  }, [visible, animationsEnabled, slideAnim, backdropAnim, pageAnim, panY]);
 
   const themeLabel = THEME_OPTIONS.find((o) => o.value === theme)?.label ?? '';
 
@@ -389,8 +468,8 @@ export function SettingsDrawer({ visible, onClose }: Props) {
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
       </Animated.View>
 
-      <Animated.View style={[styles.sheet, { transform: [{ translateY: slideAnim }] }]}>
-        <View style={styles.handle}>
+      <Animated.View style={[styles.sheet, { transform: [{ translateY: Animated.add(slideAnim, panY) }] }]}>
+        <View style={styles.handle} {...panResponder.panHandlers}>
           <View style={styles.handleBar} />
         </View>
 
@@ -405,7 +484,11 @@ export function SettingsDrawer({ visible, onClose }: Props) {
               </Pressable>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: Space['2xl'] }}>
+            <KeyboardAvoidingView
+              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+              style={{ flex: 1 }}
+            >
+            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: Space['2xl'] }}>
               {/* On-device only banner */}
               <View style={styles.onDeviceCard}>
                 <View style={styles.onDeviceIcon}>
@@ -478,17 +561,7 @@ export function SettingsDrawer({ visible, onClose }: Props) {
               </SettingsGroup>
 
               <SettingsGroup label="Profile">
-                <SettingRow icon="🙂" iconBg={IB.gold} title="Your name">
-                  <TextInput
-                    value={userName}
-                    onChangeText={setUserName}
-                    placeholder="Name"
-                    placeholderTextColor={c.textMuted}
-                    style={{ ...Type.bodyMd, color: c.text, textAlign: 'right', minWidth: 80 }}
-                    maxLength={30}
-                    returnKeyType="done"
-                  />
-                </SettingRow>
+                <NameField />
                 <LinkRow
                   icon="🧑" iconBg={IB.gold}
                   title="Character"
@@ -507,6 +580,7 @@ export function SettingsDrawer({ visible, onClose }: Props) {
               {/* Version footer */}
               <Text style={styles.versionFooter}>Track-it · v1.0.0</Text>
             </ScrollView>
+            </KeyboardAvoidingView>
           </Animated.View>
 
           {/* ── Appearance sub-page ── */}

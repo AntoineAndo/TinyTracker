@@ -7,8 +7,6 @@ import { useEffect } from 'react';
 
 import 'react-native-reanimated';
 
-SplashScreen.preventAutoHideAsync();
-
 import { RoutinesProvider } from '@/context/routines-context';
 import { SettingsProvider } from '@/context/settings-context';
 import { TrackersProvider, useTrackers } from '@/context/trackers-context';
@@ -24,6 +22,8 @@ import {
   useRoutineReminderScheduler,
   useTrackerReminderScheduler,
 } from '@/hooks/use-notification-scheduler';
+
+SplashScreen.preventAutoHideAsync();
 
 export const unstable_settings = {
   anchor: '(tabs)',
