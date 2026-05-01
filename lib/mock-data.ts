@@ -1,9 +1,26 @@
+// Deterministic mock dataset used when "mock mode" is toggled in settings.
+// Values are generated from a single underlying "wellbeing" latent factor so
+// that the Patterns / Insights feature surfaces intuitive correlations:
+//
+//   - mood, sleep, productivity all rise and fall together (positive ρ)
+//   - stress and screen time run opposite (mood up → stress and screen down)
+//   - exercise days nudge sleep and steps upward (binary × continuous)
+//   - calories is intentionally independent (a control to keep findings honest)
+//
+// Trackers and per-day logging frequencies are kept in shape with the prior
+// fixture so visual mocks of the graph still look populated.
+
 import { Entry, Tracker } from './types';
 
-// Deterministic pseudo-random in [0, 1) based on a seed
+// Deterministic pseudo-random in [0, 1).
 function rand(seed: number): number {
   const x = Math.sin(seed + 1) * 10000;
   return x - Math.floor(x);
+}
+
+// Symmetric pseudo-noise in [-amp, amp].
+function noise(seed: number, amp: number): number {
+  return (rand(seed) - 0.5) * 2 * amp;
 }
 
 const now = new Date();
@@ -11,77 +28,131 @@ const trackerStart = new Date(now);
 trackerStart.setDate(trackerStart.getDate() - 65);
 
 export const MOCK_TRACKERS: Tracker[] = [
-  { id: 'mt1', name: 'Mood',         type: 'range',   direction: undefined, color: 'blue',   icon: '🧠', reminderFrequency: 'daily', createdAt: trackerStart.toISOString() },
+  { id: 'mt1', name: 'Mood',         type: 'range',   color: 'blue',   icon: '🧠', reminderFrequency: 'daily', createdAt: trackerStart.toISOString() },
   { id: 'mt2', name: 'Exercise',     type: 'boolean', color: 'green',  icon: '💪', reminderFrequency: 'daily', createdAt: trackerStart.toISOString() },
-  { id: 'mt3', name: 'Sleep',        type: 'range',   direction: undefined, color: 'purple', icon: '😴', reminderFrequency: 'daily', createdAt: trackerStart.toISOString() },
-  { id: 'mt4', name: 'Productivity', type: 'range',   direction: undefined, color: 'orange', icon: '🧠', reminderFrequency: 'daily', createdAt: trackerStart.toISOString() },
+  { id: 'mt3', name: 'Sleep',        type: 'range',   color: 'purple', icon: '😴', reminderFrequency: 'daily', createdAt: trackerStart.toISOString() },
+  { id: 'mt4', name: 'Productivity', type: 'range',   color: 'orange', icon: '🧠', reminderFrequency: 'daily', createdAt: trackerStart.toISOString() },
   { id: 'mt5', name: 'Hydration',    type: 'count',   target: 3, color: 'yellow', icon: '🍑', reminderFrequency: 'daily', createdAt: trackerStart.toISOString() },
   { id: 'mt6', name: 'Stress',       type: 'range',   direction: 'down', color: 'red',    icon: '😤', reminderFrequency: 'daily', createdAt: trackerStart.toISOString() },
-  // log trackers
   { id: 'mt7', name: 'Pages read',   type: 'log',     color: 'teal',   icon: '📚', reminderFrequency: 'daily', createdAt: trackerStart.toISOString() },
   { id: 'mt8', name: 'Steps',        type: 'log',     min: 8000, color: 'green',  icon: '🚶', reminderFrequency: 'daily', createdAt: trackerStart.toISOString() },
   { id: 'mt9', name: 'Screen time',  type: 'log',     max: 120,  color: 'red',    icon: '📱', reminderFrequency: 'daily', createdAt: trackerStart.toISOString() },
   { id: 'mt10', name: 'Calories',    type: 'log',     min: 1800, max: 2400, color: 'orange', icon: '🍽️', reminderFrequency: 'daily', createdAt: trackerStart.toISOString() },
 ];
 
+// Latent factor that drives most other trackers; roughly [-1.6, 1.6]. Higher
+// means a "good day". Two oscillations combined give richer phase structure
+// than a single sine; the small per-day noise prevents rigid lock-step.
+function wellbeing(d: number): number {
+  return Math.sin(d / 9) + Math.sin(d / 27) * 0.6 + noise(d * 7, 0.3);
+}
+
+function clampRange(x: number): number {
+  return Math.min(5, Math.max(1, Math.round(x)));
+}
+
 function generateEntries(): Entry[] {
   const entries: Entry[] = [];
 
-  MOCK_TRACKERS.forEach((tracker, ti) => {
-    for (let d = 60; d >= 0; d--) {
-      const seed = ti * 1000 + d;
-      const fillThreshold = tracker.type === 'range' ? 0.15 : tracker.type === 'log' ? 0.20 : 0.30;
-      if (rand(seed) < fillThreshold) continue;
+  for (let d = 60; d >= 0; d--) {
+    const w = wellbeing(d);
+    const date = new Date(now);
+    date.setDate(date.getDate() - d);
+    date.setHours(20, 0, 0, 0);
+    const dayStartHour = 3;
 
-      const date = new Date(now);
-      date.setDate(date.getDate() - d);
-      date.setHours(20, 0, 0, 0);
-
-      let value: boolean | number;
-      let completed: boolean | undefined;
-
-      if (tracker.type === 'boolean') {
-        value = rand(seed + 0.5) > 0.35;
-      } else if (tracker.type === 'count') {
-        const target = tracker.target ?? 1;
-        value = Math.min(target, Math.max(1, Math.round(rand(seed + 0.5) * target)));
-      } else if (tracker.type === 'log') {
-        // Generate realistic values per tracker, with some variance day to day
-        const wave = Math.sin(d / 10 + ti) * 0.15;
-        const r = rand(seed + 0.4);
-
-        if (tracker.id === 'mt7') {
-          // Pages read: 10–60 pages/day
-          value = Math.round(10 + (r + wave) * 50);
-        } else if (tracker.id === 'mt8') {
-          // Steps: 5000–14000, centered around the 8000 min
-          value = Math.round(5000 + (r + wave) * 9000);
-        } else if (tracker.id === 'mt9') {
-          // Screen time (minutes): 60–200, max is 120
-          value = Math.round(60 + (r + wave) * 140);
-        } else {
-          // Calories: 1400–2800, min 1800 max 2400
-          value = Math.round(1400 + (r + wave) * 1400);
-        }
-
-        // ~80% of past entries are completed; today's entry is never completed in mock data
-        completed = d > 0 ? rand(seed + 0.9) > 0.20 : false;
-      } else {
-        // range
-        const wave = Math.sin(d / 7 + ti) * 1.5;
-        value = Math.min(5, Math.max(1, Math.round(3 + wave + (rand(seed + 0.3) - 0.5))));
-      }
-
+    const push = (trackerId: string, value: boolean | number, completed?: boolean) => {
       entries.push({
-        id: `me-${tracker.id}-${d}`,
-        trackerId: tracker.id,
+        id: `me-${trackerId}-${d}`,
+        trackerId,
         value,
         ...(completed !== undefined && { completed }),
         createdAt: date.toISOString(),
-        dayStartHour: 3,
+        dayStartHour,
       });
+    };
+
+    // Exercise: more likely on positive-wellbeing days. Reused below for
+    // sleep and steps to add a binary × continuous signal on top of the
+    // shared latent factor.
+    const didExercise = rand(d * 11 + 1) + 0.30 * w > 0.50;
+    if (rand(d * 13 + 2) > 0.15) push('mt2', didExercise);
+
+    // Mood: strongest direct expression of wellbeing.
+    if (rand(d * 17 + 3) > 0.10) {
+      push('mt1', clampRange(3 + 1.0 * w + noise(d * 19, 0.30)));
     }
-  });
+
+    // Sleep: wellbeing-driven with a small bonus on exercise days.
+    if (rand(d * 23 + 4) > 0.15) {
+      const sleep = clampRange(3 + 0.85 * w + (didExercise ? 0.25 : 0) + noise(d * 29, 0.50));
+      push('mt3', sleep);
+    }
+
+    // Productivity: shared latent factor; deliberately tight to mood so the
+    // "lower mood → lower productivity" pair surfaces near the top.
+    if (rand(d * 31 + 5) > 0.18) {
+      push('mt4', clampRange(3 + 1.0 * w + noise(d * 37, 0.30)));
+    }
+
+    // Stress (direction='down'): inverse of wellbeing → strong negative
+    // correlation with mood/sleep/productivity, strong positive with screen.
+    if (rand(d * 41 + 6) > 0.22) {
+      push('mt6', clampRange(3 - 0.9 * w + noise(d * 43, 0.35)));
+    }
+
+    // Hydration (count, target 3): mild positive with wellbeing.
+    if (rand(d * 47 + 7) > 0.30) {
+      const hyd = Math.min(4, Math.max(1, Math.round(2.2 + 0.4 * w + noise(d * 53, 0.7))));
+      push('mt5', hyd);
+    }
+
+    // Pages read: mild positive with wellbeing. Coefficient kept modest so
+    // Pages does not dominate the rankings (it has a lot of headroom and
+    // would otherwise correlate spuriously high with everything).
+    {
+      const r = rand(d * 59 + 8);
+      if (r > 0.30) {
+        const pages = Math.max(0, Math.round(22 + 7 * w + noise(d * 61, 11)));
+        const completed = d > 0 && r > 0.40;
+        push('mt7', pages, completed);
+      }
+    }
+
+    // Steps: wellbeing + smaller exercise-day bonus (kept modest so the
+    // tautological "exercise → steps" finding does not crowd out the more
+    // interesting mood/sleep/screen-time pairs).
+    {
+      const r = rand(d * 67 + 9);
+      if (r > 0.18) {
+        const steps = Math.max(2000, Math.round(7500 + 1800 * w + (didExercise ? 1200 : 0) + noise(d * 71, 1200)));
+        const completed = d > 0 && r > 0.28;
+        push('mt8', steps, completed);
+      }
+    }
+
+    // Screen time: NEGATIVELY correlated with wellbeing → surfaces as
+    // "On low-mood days, screen time runs higher" once analyzed.
+    {
+      const r = rand(d * 73 + 10);
+      if (r > 0.18) {
+        const screen = Math.max(20, Math.round(95 - 38 * w + noise(d * 79, 16)));
+        const completed = d > 0 && r > 0.28;
+        push('mt9', screen, completed);
+      }
+    }
+
+    // Calories: intentionally independent. Acts as a control: it should
+    // NOT appear among the surfaced findings, which keeps the demo honest.
+    {
+      const r = rand(d * 83 + 11);
+      if (r > 0.25) {
+        const cal = Math.round(2100 + noise(d * 89, 350));
+        const completed = d > 0 && r > 0.35;
+        push('mt10', cal, completed);
+      }
+    }
+  }
 
   return entries;
 }

@@ -1,5 +1,9 @@
+// Trackers + entries context. Owns the in-memory state, the chunked-storage
+// reads/writes, and the derived per-tracker/per-day pivot used by the graph
+// and correlation features. The pivot lives here as a single source of truth
+// so consumers do not recompute it (project rule, see CLAUDE.md).
 import { randomUUID } from 'expo-crypto';
-import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useSettings } from '@/context/settings-context';
 import { MOCK_ENTRIES, MOCK_TRACKERS } from '@/lib/mock-data';
@@ -17,7 +21,7 @@ import {
   sealAndCreateChunk,
 } from '@/lib/storage';
 import { ChunkIndex, Entry, Tracker } from '@/lib/types';
-import { fromDateString, getCurrentDay, toDateString } from '@/lib/utils';
+import { fromDateString, getCurrentDay, getLogicalDay, toDateString } from '@/lib/utils';
 
 const CHUNK_DAYS = 90;
 
@@ -25,6 +29,10 @@ interface TrackersContextValue {
   isLoading: boolean;
   trackers: Tracker[];
   entries: Entry[];
+  /** Pivot keyed by trackerId then YYYY-MM-DD logical day. Most recent entry wins per cell. */
+  entriesByTrackerByDay: Record<string, Record<string, Entry>>;
+  /** YYYY-MM-DD of the oldest currently-loaded entry; null when no entries exist. */
+  oldestLoadedDay: string | null;
   hasMoreEntries: boolean;
   loadMoreEntries: () => Promise<void>;
   mockMode: boolean;
@@ -75,6 +83,25 @@ export function TrackersProvider({ children }: { children: React.ReactNode }) {
   const trackers = mockMode ? MOCK_TRACKERS : realTrackers;
   const entries = mockMode ? MOCK_ENTRIES : realEntries;
   const hasMoreEntries = !mockMode && loadedChunkCount < chunkIndex.length;
+
+  // Lifted pivot: trackerId -> YYYY-MM-DD -> Entry (most recent wins per cell).
+  // The graph used to recompute this locally; correlations need it too. Done
+  // in a single pass so we also derive `oldestLoadedDay` for free.
+  const { entriesByTrackerByDay, oldestLoadedDay } = useMemo(() => {
+    const map: Record<string, Record<string, Entry>> = {};
+    let oldest: string | null = null;
+    for (const entry of entries) {
+      if (!map[entry.trackerId]) map[entry.trackerId] = {};
+      const day = getLogicalDay(new Date(entry.createdAt), entry.dayStartHour ?? 0);
+      const dayStr = toDateString(day);
+      const existing = map[entry.trackerId][dayStr];
+      if (!existing || entry.createdAt > existing.createdAt) {
+        map[entry.trackerId][dayStr] = entry;
+      }
+      if (oldest === null || dayStr < oldest) oldest = dayStr;
+    }
+    return { entriesByTrackerByDay: map, oldestLoadedDay: oldest };
+  }, [entries]);
 
   // ── Tracker mutations ───────────────────────────────────────────────────────
 
@@ -194,7 +221,9 @@ export function TrackersProvider({ children }: { children: React.ReactNode }) {
   return (
     <TrackersContext.Provider value={{
       isLoading,
-      trackers, entries, hasMoreEntries, loadMoreEntries,
+      trackers, entries,
+      entriesByTrackerByDay, oldestLoadedDay,
+      hasMoreEntries, loadMoreEntries,
       mockMode, setMockMode,
       addTracker, updateTracker, deleteTracker,
       addEntry, addEntryForDate, updateEntry, completeEntry, deleteEntry,
