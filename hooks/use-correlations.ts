@@ -41,9 +41,14 @@ export function useCorrelations(): CorrelationsResult {
 
   const findings = useMemo(() => {
     if (!horizon.ready) return [];
+    // Ask the engine for every finding that crosses the surfacing threshold,
+    // not just the top 5. The constellation needs all of them so each tracker
+    // gets a chance to connect. The Insights card slices to its own top-K
+    // downstream via mergeInsights, so this doesn't flood the patterns list.
     return findPairwiseInsights(trackers, routineMembership, entriesByTrackerByDay, {
       today,
       horizonDays: HORIZON_DAYS,
+      topK: Number.POSITIVE_INFINITY,
     });
   }, [horizon.ready, trackers, routineMembership, entriesByTrackerByDay, today]);
 

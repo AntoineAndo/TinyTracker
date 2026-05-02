@@ -80,15 +80,44 @@ function dueLabel(daysUntil: number): string {
 }
 
 export default function TodayScreen() {
-  const { isLoading, trackers, entries, addEntry, updateEntry, completeEntry, deleteEntry } = useTrackers();
+  const {
+    isLoading,
+    trackers: allTrackers,
+    entries,
+    addEntry,
+    updateEntry,
+    completeEntry,
+    deleteEntry,
+    dismissedTodayIds,
+    dismissTrackerForToday,
+    refreshDismissedToday,
+  } = useTrackers();
+  // Hide swiped-away trackers for the rest of the logical day. Filtering at
+  // the page level keeps the dismissal scoped to the Today view; other screens
+  // (graph, tracker detail) still see the tracker.
+  const trackers = useMemo(
+    () => allTrackers.filter((t) => !dismissedTodayIds.has(t.id)),
+    [allTrackers, dismissedTodayIds],
+  );
   // currentPeriodEntryMap is still needed here for streak computation and the main tracker handlers.
   const { currentPeriodEntryMap } = useRoutines();
   const { characterConfig, userName } = useSettings();
   const [showAll, setShowAll] = useState(false);
+  const [showHidden, setShowHidden] = useState(false);
+  // Trackers the user swiped away on the current logical day. Mirrored from
+  // context state so the section re-renders when the dismissed set changes.
+  const hiddenTrackers = useMemo(
+    () => allTrackers.filter((t) => dismissedTodayIds.has(t.id)),
+    [allTrackers, dismissedTodayIds],
+  );
   const [editingTracker, setEditingTracker] = useState<Tracker | null>(null);
   const [editingEntry, setEditingEntry] = useState<Entry | null>(null);
   const [exitingIds, setExitingIds] = useState<Set<string>>(new Set());
   const [pendingDismissIds, setPendingDismissIds] = useState<Set<string>>(new Set());
+  // IDs whose exit animation is running because the user swiped them away
+  // (as opposed to completing them). On exit-complete we persist the dismissal
+  // so the tracker stays hidden for the rest of the logical day.
+  const swipeDismissedIdsRef = useRef<Set<string>>(new Set());
   // Ref that maps trackerId → pending dismiss timeout so each timer can be
   // cancelled individually (e.g. on unmount or rapid double-tap).
   const dismissTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
@@ -149,6 +178,15 @@ export default function TodayScreen() {
     d.setHours(0, 0, 0, 0);
     return d;
   }, [today]);
+
+  // Re-read dismissed-today whenever the logical day changes while the app is
+  // foregrounded (foreground tick from `useCurrentDay`, midnight crossing,
+  // dayStartHour change). Storage self-clears on date mismatch so a no-op
+  // read after rollover empties the set and trackers reappear.
+  const todayKey = useMemo(() => todayMidnight.toDateString(), [todayMidnight]);
+  useEffect(() => {
+    refreshDismissedToday();
+  }, [todayKey, refreshDismissedToday]);
 
   const yesterday = useMemo(() => {
     const d = new Date(todayMidnight);
@@ -250,6 +288,41 @@ export default function TodayScreen() {
       await addEntry({ trackerId: tracker.id, value });
     }
   }, [currentPeriodEntryMap, showAll, updateEntry, addEntry]);  
+
+  const handleSwipeDismiss = useCallback((trackerId: string) => {
+    // Cancel any pending completion-dismiss for this tracker so we don't
+    // double-trigger the exit animation.
+    const existingTimer = dismissTimers.current.get(trackerId);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+      dismissTimers.current.delete(trackerId);
+    }
+    setPendingDismissIds((prev) => {
+      if (!prev.has(trackerId)) return prev;
+      const next = new Set(prev);
+      next.delete(trackerId);
+      return next;
+    });
+    swipeDismissedIdsRef.current.add(trackerId);
+    setExitingIds((prev) => new Set([...prev, trackerId]));
+  }, []);
+
+  const handleExited = useCallback(async (id: string) => {
+    // Persist before clearing the swipe ref so a duplicate `onExited` (e.g.
+    // StrictMode remount) cannot race past the persistence step.
+    if (swipeDismissedIdsRef.current.has(id)) {
+      swipeDismissedIdsRef.current.delete(id);
+      // Awaited so the AsyncStorage write flushes even if the user backgrounds
+      // the app immediately after the exit animation completes.
+      await dismissTrackerForToday(id);
+    }
+    setExitingIds((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+  }, [dismissTrackerForToday]);
 
   const handleComplete = useCallback(async (tracker: Tracker) => {
     const existing = currentPeriodEntryMap[tracker.id];
@@ -364,16 +437,38 @@ export default function TodayScreen() {
                     onSave={handleSave}
                     onComplete={handleComplete}
                     onEdit={(tracker, entry) => { setEditingTracker(tracker); setEditingEntry(entry); }}
-                    onExited={(id) => setExitingIds((prev) => {
-                      const next = new Set(prev);
-                      next.delete(id);
-                      return next;
-                    })}
+                    onExited={handleExited}
+                    onDismiss={handleSwipeDismiss}
                   />
                 </View>
               );
             })}
           </>
+        )}
+
+        {/* Hidden section toggle + list. Mirrors the "Completed" pattern so
+            the user can review what they swiped away today and unhide rows. */}
+        {!isLoading && hiddenTrackers.length > 0 && (
+          <View style={styles.completedRow}>
+            <Text style={styles.completedLabel}>{hiddenTrackers.length} hidden</Text>
+            <Pressable onPress={() => setShowHidden((v) => !v)}>
+              <Text style={styles.completedToggleText}>{showHidden ? 'Hide' : 'Show'} →</Text>
+            </Pressable>
+          </View>
+        )}
+        {showHidden && hiddenTrackers.length > 0 && (
+          <TodayTrackerList
+            trackers={hiddenTrackers}
+            entryMap={currentPeriodEntryMap}
+            streakMap={streakMap}
+            showCompleted={false}
+            exitingIds={new Set()}
+            pendingDismissIds={new Set()}
+            onSave={handleSave}
+            onComplete={handleComplete}
+            onEdit={(tracker, entry) => { setEditingTracker(tracker); setEditingEntry(entry); }}
+            onExited={() => {}}
+          />
         )}
 
         {/* Completed section toggle + list */}

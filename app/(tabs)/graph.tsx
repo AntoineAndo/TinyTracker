@@ -345,6 +345,10 @@ export default function GraphScreen() {
   const styles = useMemo(() => makeStyles(c), [c]);
   const { today } = useCurrentDay();
   const [editing, setEditing] = useState<EditingState | null>(null);
+  // Lifted constellation focus: tapping a node in ConstellationView filters
+  // the InsightsSection below to only that tracker's connections. State lives
+  // here so the two components stay in sync without a context.
+  const [focusedTrackerId, setFocusedTrackerId] = useState<string | null>(null);
 
   const startDate = useMemo(() => {
     const d = new Date(today);
@@ -495,8 +499,8 @@ export default function GraphScreen() {
           </ScrollView>
         </View>
 
-        <InsightsSection />
-        <ConstellationView />
+        <ConstellationView focusedId={focusedTrackerId} onFocusChange={setFocusedTrackerId} />
+        <InsightsSection focusedTrackerId={focusedTrackerId} />
         <OverlayView />
       </ScrollView>
 
