@@ -22,7 +22,10 @@ export const Space = {
 } as const;
 
 // Corner radii. `pill` produces a fully rounded end-cap on any element.
+// `xs` is reserved for tiny chrome (legend bars, dividers) where 2px reads
+// as a square with softened pixel edges.
 export const Radius = {
+  xs: 2,
   sm: 8,
   md: 12,
   lg: 16,
@@ -47,11 +50,14 @@ export const FontFamily = {
 
 // Font weights. `medium` (500) is reserved for tertiary text (links,
 // secondary button labels, faint day labels) where semibold feels too heavy.
+// `heavy` (800) is reserved for big-number displays (count totals, log totals)
+// where bold reads too thin against large numerals.
 export const Weight = {
   regular: '400',
   medium: '500',
   semibold: '600',
   bold: '700',
+  heavy: '800',
 } as const satisfies Record<string, TextStyle['fontWeight']>;
 
 // Typography roles. Spread into a StyleSheet entry to apply a role, then

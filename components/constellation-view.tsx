@@ -1,20 +1,23 @@
-// Constellation: a circular layout of every tracker with edges drawn between
-// pairs that the correlation engine flagged as significant. Solid edges =
+// Constellation: a force-directed layout of every tracker with edges drawn
+// between pairs the correlation engine flagged as significant. Solid edges =
 // "moves together" (positive primary), dashed edges = "opposite" (negative
 // primary). Edge thickness/opacity scale with effect size via findingWeight.
+// Strongly-correlated trackers naturally cluster closer together because the
+// link force uses a distance inversely proportional to finding weight.
 // Tap a node to focus on its incident edges; tap the same node to clear.
 
-import React, { useCallback, useMemo, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useMemo } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Defs, G, Line, RadialGradient, Stop, Text as SvgText } from 'react-native-svg';
 
 import { Skeleton } from '@/components/skeleton';
-import { Border, Radius, Shadow, Space, Type } from '@/constants/tokens';
+import { Border, Radius, Shadow, Space, Type, Weight } from '@/constants/tokens';
 import { useTrackers } from '@/context/trackers-context';
 import { useCorrelations } from '@/hooks/use-correlations';
 import { useDeferMount } from '@/hooks/use-defer-mount';
 import { AppTheme, useTheme } from '@/hooks/use-theme';
 import { findingWeight } from '@/lib/correlations';
+import { computeConstellationLayout, type GraphEdge } from '@/lib/graph-layout';
 import { getTrackerColorHex, getTrackerColorRgba } from '@/lib/tracker-colors';
 import { getTrackerIcon } from '@/lib/tracker-icons';
 
@@ -24,7 +27,16 @@ const NEGATIVE_COLOR = '#ef4444';
 
 const VIEW_SIZE = 340;
 const NODE_RADIUS = 22;
-const RING_RADIUS = 120;
+// Padding kept around the canvas so labels and node circles stay inside the
+// viewBox after the force simulation settles.
+const LAYOUT_PAD = NODE_RADIUS + 18;
+// Font sizes for SVG text inside nodes. Icon glyph is sized larger than the
+// label to match the visual hierarchy on the canvas.
+const NODE_ICON_SIZE = 18;
+const NODE_LABEL_SIZE = Type.overline.fontSize;
+// Legend bar dimensions: a 3px tall pill that mirrors the edge stroke style.
+const LEGEND_BAR_W = 18;
+const LEGEND_BAR_H = 3;
 
 function makeStyles(c: AppTheme) {
   return StyleSheet.create({
@@ -40,7 +52,12 @@ function makeStyles(c: AppTheme) {
       borderColor: c.border,
       ...Shadow.card,
     },
-    canvas: { width: '100%', aspectRatio: 1 },
+    canvas: { width: '100%', aspectRatio: 1, position: 'relative' },
+    // Hit target overlays: one per node and one full-canvas to clear focus.
+    // Sized in % of the square canvas so they line up with the SVG viewBox
+    // regardless of the rendered pixel width.
+    hitNode: { position: 'absolute', borderRadius: 999 },
+    hitBackground: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
     legend: {
       flexDirection: 'row',
       gap: Space.lg,
@@ -48,8 +65,8 @@ function makeStyles(c: AppTheme) {
       marginTop: Space.md,
     },
     legendItem: { flexDirection: 'row', alignItems: 'center', gap: Space.xs },
-    legendBarSolid: { width: 18, height: 3, borderRadius: 2, backgroundColor: POSITIVE_COLOR },
-    legendBarDashed: { width: 18, height: 0, borderTopWidth: 3, borderStyle: 'dashed', borderColor: NEGATIVE_COLOR },
+    legendBarSolid: { width: LEGEND_BAR_W, height: LEGEND_BAR_H, borderRadius: Radius.xs, backgroundColor: POSITIVE_COLOR },
+    legendBarDashed: { width: LEGEND_BAR_W, height: 0, borderTopWidth: LEGEND_BAR_H, borderStyle: 'dashed', borderColor: NEGATIVE_COLOR },
     legendText: { ...Type.caption, color: c.textSub },
     footer: {
       ...Type.caption,
@@ -61,31 +78,47 @@ function makeStyles(c: AppTheme) {
   });
 }
 
-export function ConstellationView() {
+export interface ConstellationViewProps {
+  /** Currently focused tracker id, or null when nothing is selected. */
+  focusedId: string | null;
+  /** Notifies the parent when the focused tracker changes (or is cleared). */
+  onFocusChange: (id: string | null) => void;
+}
+
+export function ConstellationView({ focusedId, onFocusChange }: ConstellationViewProps) {
   const c = useTheme();
   const styles = useMemo(() => makeStyles(c), [c]);
   const { trackers } = useTrackers();
   const { findings } = useCorrelations();
-  // Frame 3 in the staggered mount sequence (grid=1, insights=2, this=3, overlay=4).
-  const mounted = useDeferMount(3);
-  const [focusedId, setFocusedId] = useState<string | null>(null);
+  // Frame 2 in the staggered mount sequence (grid=1, this=2, insights=3, overlay=4).
+  const mounted = useDeferMount(2);
 
-  // Position trackers on a circle around the SVG center (memoized).
-  const positions = useMemo(() => {
-    const cx = VIEW_SIZE / 2;
-    const cy = VIEW_SIZE / 2;
-    const map: Record<string, { x: number; y: number }> = {};
-    const n = trackers.length;
-    if (n === 0) return map;
-    for (let i = 0; i < n; i++) {
-      const angle = (i / n) * Math.PI * 2 - Math.PI / 2;
-      map[trackers[i].id] = {
-        x: cx + Math.cos(angle) * RING_RADIUS,
-        y: cy + Math.sin(angle) * RING_RADIUS,
-      };
-    }
-    return map;
-  }, [trackers]);
+  // Structural fingerprints: the simulation only cares about node ids and
+  // weighted edges, not the full tracker/finding objects. Recomputing only
+  // when those structural keys change avoids re-running the 300-tick
+  // simulation on every render where useCorrelations returns a new array.
+  const trackerIds = useMemo(() => trackers.map((t) => t.id), [trackers]);
+  const trackerIdsKey = useMemo(() => trackerIds.join('|'), [trackerIds]);
+  const edgeInputs: GraphEdge[] = useMemo(
+    () => findings.map((f) => ({ aId: f.trackerA.id, bId: f.trackerB.id, weight: findingWeight(f) })),
+    [findings],
+  );
+  const edgeInputsKey = useMemo(
+    () => edgeInputs.map((e) => `${e.aId}>${e.bId}:${e.weight.toFixed(3)}`).join('|'),
+    [edgeInputs],
+  );
+
+  const positions = useMemo(
+    () => computeConstellationLayout(trackerIds, edgeInputs, {
+      size: VIEW_SIZE,
+      pad: LAYOUT_PAD,
+      collideRadius: NODE_RADIUS + 6,
+    }),
+    // Keys are derived from trackerIds/edgeInputs above; depending on the
+    // strings keeps the layout stable when only references change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [trackerIdsKey, edgeInputsKey],
+  );
 
   // Pre-compute edge geometry.
   const edges = useMemo(() => {
@@ -112,9 +145,13 @@ export function ConstellationView() {
       .filter((e): e is NonNullable<typeof e> => e !== null);
   }, [findings, positions]);
 
-  const handleNodePress = useCallback((id: string) => {
-    setFocusedId((prev) => (prev === id ? null : id));
-  }, []);
+  // Tap toggles: same node clears, different node switches.
+  const handleNodePress = useCallback(
+    (id: string) => {
+      onFocusChange(focusedId === id ? null : id);
+    },
+    [focusedId, onFocusChange],
+  );
 
   if (trackers.length < 2) {
     return (
@@ -157,18 +194,30 @@ export function ConstellationView() {
 
       <View style={styles.card}>
         <View style={styles.canvas}>
-          <Svg viewBox={`0 0 ${VIEW_SIZE} ${VIEW_SIZE}`} width="100%" height="100%">
+          {/* Background tap target sits behind the SVG — only reachable when
+              nothing else captures the touch, i.e. on empty canvas. Visible
+              only when something is focused so it doesn't intercept taps that
+              would otherwise pass through (e.g. accessibility tools). */}
+          {focusedId !== null && (
+            <Pressable
+              style={styles.hitBackground}
+              onPress={() => onFocusChange(null)}
+            />
+          )}
+          <Svg viewBox={`0 0 ${VIEW_SIZE} ${VIEW_SIZE}`} width="100%" height="100%" pointerEvents="none">
             <Defs>
               <RadialGradient id="halo" cx="50%" cy="50%" r="50%">
                 <Stop offset="0%" stopColor={c.tint} stopOpacity={0.18} />
                 <Stop offset="100%" stopColor={c.tint} stopOpacity={0} />
               </RadialGradient>
             </Defs>
-            <Circle cx={VIEW_SIZE / 2} cy={VIEW_SIZE / 2} r={RING_RADIUS + 30} fill="url(#halo)" />
+            <Circle cx={VIEW_SIZE / 2} cy={VIEW_SIZE / 2} r={VIEW_SIZE / 2} fill="url(#halo)" />
 
             {edges.map((e) => {
               const dimmed = focusedId !== null && e.aId !== focusedId && e.bId !== focusedId;
-              const opacity = dimmed ? 0.08 : e.baseOpacity;
+              // Connected edges keep their base intensity; unrelated edges
+              // fade hard so the focused subgraph clearly stands out.
+              const opacity = dimmed ? 0.05 : e.baseOpacity;
               return (
                 <Line
                   key={e.key}
@@ -186,28 +235,33 @@ export function ConstellationView() {
               const p = positions[t.id];
               if (!p) return null;
               const fill = getTrackerColorRgba(t.color, 0.18);
+              const focusedFill = getTrackerColorRgba(t.color, 0.32);
               const stroke = getTrackerColorHex(t.color);
               const isFocused = focusedId === t.id;
               const isDimmed = focusedId !== null && !isFocused;
+              const groupOpacity = isDimmed ? 0.3 : 1;
               return (
-                <G key={t.id} onPress={() => handleNodePress(t.id)} opacity={isDimmed ? 0.45 : 1}>
+                <G key={t.id} opacity={groupOpacity}>
+                  {/* Opaque base sits behind the tinted fill so edges passing
+                      under the node aren't visible through the circle. */}
+                  <Circle cx={p.x} cy={p.y} r={NODE_RADIUS} fill={c.card} />
                   <Circle
                     cx={p.x} cy={p.y} r={NODE_RADIUS}
-                    fill={fill}
+                    fill={isFocused ? focusedFill : fill}
                     stroke={stroke}
                     strokeWidth={isFocused ? 3 : 2}
                   />
                   <SvgText
                     x={p.x} y={p.y + 5}
                     textAnchor="middle"
-                    fontSize={18}>
+                    fontSize={NODE_ICON_SIZE}>
                     {getTrackerIcon(t.icon)}
                   </SvgText>
                   <SvgText
                     x={p.x} y={p.y + NODE_RADIUS + 14}
                     textAnchor="middle"
-                    fontSize={10}
-                    fontWeight="700"
+                    fontSize={NODE_LABEL_SIZE}
+                    fontWeight={Weight.bold}
                     fill={c.text}>
                     {t.name}
                   </SvgText>
@@ -215,6 +269,31 @@ export function ConstellationView() {
               );
             })}
           </Svg>
+
+          {/* Real Pressable hit targets layered on top of the SVG. Positioned
+              in % so they line up with the viewBox regardless of canvas size.
+              Using RN Pressables (not Svg onPress) gives us reliable taps and
+              correct switching: tapping a different node fires its onPress
+              and updates focus, instead of the SVG group eating the event. */}
+          {trackers.map((t) => {
+            const p = positions[t.id];
+            if (!p) return null;
+            const hitR = NODE_RADIUS + 10;
+            const leftPct = ((p.x - hitR) / VIEW_SIZE) * 100;
+            const topPct = ((p.y - hitR) / VIEW_SIZE) * 100;
+            const sizePct = ((hitR * 2) / VIEW_SIZE) * 100;
+            return (
+              <Pressable
+                key={t.id}
+                style={[
+                  styles.hitNode,
+                  { left: `${leftPct}%`, top: `${topPct}%`, width: `${sizePct}%`, height: `${sizePct}%` },
+                ]}
+                onPress={() => handleNodePress(t.id)}
+                hitSlop={6}
+              />
+            );
+          })}
         </View>
 
         <View style={styles.legend}>

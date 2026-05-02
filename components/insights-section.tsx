@@ -9,6 +9,7 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { Skeleton } from '@/components/skeleton';
 import { Radius, Shadow, Size, Space, Type } from '@/constants/tokens';
+import { useTrackers } from '@/context/trackers-context';
 import { useDeferMount } from '@/hooks/use-defer-mount';
 import { useInsights } from '@/hooks/use-insights';
 import { AppTheme, useTheme } from '@/hooks/use-theme';
@@ -156,13 +157,28 @@ function InsightCard({ insight, styles }: { insight: Insight; styles: ReturnType
   return <TrendCard trend={insight.trend} styles={styles} />;
 }
 
-export function InsightsSection() {
+export interface InsightsSectionProps {
+  /**
+   * Optional tracker id from the constellation view's focused state. When set,
+   * the feed is filtered to that tracker's connections (no top-K cap) and the
+   * header copy reflects the narrowed scope.
+   */
+  focusedTrackerId?: string | null;
+}
+
+export function InsightsSection({ focusedTrackerId }: InsightsSectionProps = {}) {
   const c = useTheme();
   const styles = useMemo(() => makeStyles(c), [c]);
-  // Frame 2 in the staggered mount sequence (grid=1, this=2, constellation=3,
+  // Frame 3 in the staggered mount sequence (grid=1, constellation=2, this=3,
   // overlay=4). One heavy widget per frame instead of one giant blocking mount.
-  const mounted = useDeferMount(2);
-  const { insights, ready, loading } = useInsights();
+  const mounted = useDeferMount(3);
+  const { trackers } = useTrackers();
+  const { insights, ready, loading } = useInsights(focusedTrackerId);
+
+  const focusedTracker = useMemo(
+    () => (focusedTrackerId ? trackers.find((t) => t.id === focusedTrackerId) : undefined),
+    [focusedTrackerId, trackers],
+  );
 
   // Show the skeleton until both the deferred mount fires AND the correlation
   // engine has finished its chunk-load loop. Either being incomplete means
@@ -173,16 +189,22 @@ export function InsightsSection() {
   return (
     <View style={styles.container}>
       <View style={styles.headerBlock}>
-        <Text style={styles.header}>Patterns</Text>
+        <Text style={styles.header}>
+          {focusedTracker ? `Patterns for ${focusedTracker.name}` : 'Patterns'}
+        </Text>
         <Text style={styles.helper}>
-          Connections we noticed across your last 180 days of logs.
+          {focusedTracker
+            ? 'Top connections for this tracker. Tap the node again to see all patterns.'
+            : 'Connections we noticed across your last 180 days of logs.'}
         </Text>
       </View>
       <View style={styles.cards}>
         {showSkeleton && <Skeleton style={styles.skeleton} />}
         {showEmpty && (
           <Text style={styles.empty}>
-            Log a few more days across multiple trackers and patterns will appear here.
+            {focusedTracker
+              ? 'No connections for this tracker yet. Keep logging — patterns appear once it overlaps with others for ~14 days.'
+              : 'Log a few more days across multiple trackers and patterns will appear here.'}
           </Text>
         )}
         {insights.map((i) => (

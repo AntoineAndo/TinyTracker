@@ -6,6 +6,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 
 import 'react-native-reanimated';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { RoutinesProvider } from '@/context/routines-context';
 import { SettingsProvider } from '@/context/settings-context';
@@ -116,8 +117,10 @@ export default function RootLayout() {
   if (!fontsLoaded) return null;
 
   return (
-    <SettingsProvider>
-      <RootLayoutNav />
-    </SettingsProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SettingsProvider>
+        <RootLayoutNav />
+      </SettingsProvider>
+    </GestureHandlerRootView>
   );
 }

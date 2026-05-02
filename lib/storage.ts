@@ -1,3 +1,6 @@
+// AsyncStorage layer for trackers, routines, chunked entries, and ephemeral
+// per-day UI state (e.g. dismissed-today). Exposes typed get/save helpers so
+// callers never have to deal with raw keys or JSON parsing.
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { ChunkIndex, ChunkMeta, Entry, Routine, Tracker } from './types';
@@ -10,6 +13,7 @@ const ROUTINES_KEY = '@trackit/routines';
 const LEGACY_ENTRIES_KEY = '@trackit/entries';
 const INDEX_KEY = '@trackit/entries/index';
 const CHUNK_PREFIX = '@trackit/entries/';   // + chunk id, e.g. '@trackit/entries/chunk_1k3m2'
+const DISMISSED_TODAY_KEY = '@trackit/dismissed-today';
 
 const CHUNK_DAYS = 90;
 
@@ -41,6 +45,36 @@ export async function getRoutines(): Promise<Routine[]> {
 
 export async function saveRoutines(routines: Routine[]): Promise<void> {
   await AsyncStorage.setItem(ROUTINES_KEY, JSON.stringify(routines));
+}
+
+// ── Dismissed today ───────────────────────────────────────────────────────────
+// Tracker IDs the user swiped away on the current logical day. The record is
+// scoped to a single day: when the stored date no longer matches the current
+// logical day (rollover, dayStartHour change), reads return empty and the key
+// is cleared so trackers reappear automatically the next day.
+
+type DismissedTodayRecord = { date: string; ids: string[] };
+
+export async function getDismissedToday(dayStartHour: number): Promise<string[]> {
+  try {
+    const raw = await AsyncStorage.getItem(DISMISSED_TODAY_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as DismissedTodayRecord;
+    const today = toDateString(getCurrentDay(dayStartHour));
+    if (parsed.date !== today) {
+      await AsyncStorage.removeItem(DISMISSED_TODAY_KEY);
+      return [];
+    }
+    return Array.isArray(parsed.ids) ? parsed.ids : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function saveDismissedToday(ids: string[], dayStartHour: number): Promise<void> {
+  const date = toDateString(getCurrentDay(dayStartHour));
+  const record: DismissedTodayRecord = { date, ids };
+  await AsyncStorage.setItem(DISMISSED_TODAY_KEY, JSON.stringify(record));
 }
 
 // ── Chunk index ───────────────────────────────────────────────────────────────

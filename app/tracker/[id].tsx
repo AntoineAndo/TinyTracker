@@ -28,17 +28,20 @@ function formatValue(entry: Entry, type: string, target?: number): string {
   return String(entry.value);
 }
 
-// ── Animated SVG circle ────────────────────────────────────────────────────────
-
-const AnimatedCircle = Animated.createAnimatedComponent(Circle);
-
 // ── Count entry UI ─────────────────────────────────────────────────────────────
 
 const RING_SIZE = 220;
 const STROKE = 14;
 const RADIUS = (RING_SIZE - STROKE) / 2;
-const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 const BTN_SIZE = RING_SIZE * 0.58;
+const RING_CIRCUMFERENCE = 2 * Math.PI * RADIUS;
+// Rotate the SVG so 0 sits at 12 o'clock and progress fills clockwise.
+const RING_ROTATION = `rotate(-90 ${RING_SIZE / 2} ${RING_SIZE / 2})`;
+
+// Animated SVG circle: binding `progressAnim` directly to its props uses
+// react-native-svg's setNativeProps under the hood, so the ring updates
+// per frame without triggering a React reconciliation pass.
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 function CountEntryUI({ target, colorHex, initialCount, onSave, onLongPress, c }: {
   target: number;
@@ -54,13 +57,15 @@ function CountEntryUI({ target, colorHex, initialCount, onSave, onLongPress, c }
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
+    return () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+    };
   }, []);
 
   useEffect(() => {
     setCount(initialCount);
     progressAnim.setValue(initialCount / target);
-  }, [initialCount]);
+  }, [initialCount, target, progressAnim]);
 
   function handleIncrement() {
     if (count >= target) return;
@@ -76,27 +81,51 @@ function CountEntryUI({ target, colorHex, initialCount, onSave, onLongPress, c }
     saveTimer.current = setTimeout(() => onSave(next), 500);
   }
 
-  const strokeDashoffset = progressAnim.interpolate({ inputRange: [0, 1], outputRange: [CIRCUMFERENCE, 0] });
-  const strokeOpacity = progressAnim.interpolate({ inputRange: [0, 1], outputRange: [0.25, 1] });
   const atTarget = count >= target;
+  // Drive the ring via stroke-dasharray: a single value (dashoffset) shrinks
+  // from full circumference to 0 as progress goes 0 -> 1. Animated bound
+  // straight to the prop avoids per-frame setState. Opacity eases in with
+  // progress so the ring fades from a low-opacity hint up to full saturation,
+  // matching the previous fillOpacity interpolation.
+  const clampedProgress = progressAnim.interpolate({
+    inputRange: [-1, 0, 1, 2],
+    outputRange: [0, 0, 1, 1],
+  });
+  const dashOffset = clampedProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [RING_CIRCUMFERENCE, 0],
+  });
+  const strokeOpacity = clampedProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.25, 1],
+  });
 
   return (
     <View style={countStyles.container}>
       <View style={countStyles.ringWrapper}>
         <Svg width={RING_SIZE} height={RING_SIZE} style={StyleSheet.absoluteFill}>
+          {/* Static background track. */}
           <Circle
-            cx={RING_SIZE / 2} cy={RING_SIZE / 2} r={RADIUS}
-            stroke={c.cellEmpty} strokeWidth={STROKE} fill="none"
+            cx={RING_SIZE / 2}
+            cy={RING_SIZE / 2}
+            r={RADIUS}
+            stroke={c.cellEmpty}
+            strokeWidth={STROKE}
+            fill="none"
           />
+          {/* Foreground progress arc, animated via dash-offset. */}
           <AnimatedCircle
-            cx={RING_SIZE / 2} cy={RING_SIZE / 2} r={RADIUS}
-            stroke={colorHex} strokeWidth={STROKE} fill="none"
-            strokeOpacity={strokeOpacity}
-            strokeDasharray={CIRCUMFERENCE}
-            strokeDashoffset={strokeDashoffset}
+            cx={RING_SIZE / 2}
+            cy={RING_SIZE / 2}
+            r={RADIUS}
+            stroke={colorHex}
+            strokeWidth={STROKE}
             strokeLinecap="round"
-            rotation="-90"
-            origin={`${RING_SIZE / 2}, ${RING_SIZE / 2}`}
+            fill="none"
+            strokeDasharray={`${RING_CIRCUMFERENCE} ${RING_CIRCUMFERENCE}`}
+            strokeDashoffset={dashOffset}
+            strokeOpacity={strokeOpacity}
+            transform={RING_ROTATION}
           />
         </Svg>
         <AnimatedButton
@@ -262,7 +291,7 @@ export default function TrackerDetailScreen() {
   const c = useTheme();
   const styles = useMemo(() => makeStyles(c), [c]);
 
-  const tracker = trackers.find((t) => t.id === id) as Tracker | undefined;
+  const tracker = trackers.find((t) => t.id === id);
   const trackerEntries = entries
     .filter((e) => e.trackerId === id)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -460,7 +489,7 @@ const countStyles = StyleSheet.create({
   },
   btnText: { color: '#fff', fontSize: 28, fontWeight: Weight.bold },
   labelRow: { alignItems: 'center' },
-  countNum: { fontSize: 28, fontWeight: '800' },
+  countNum: { fontSize: 28, fontWeight: Weight.heavy },
   countTarget: { fontSize: 20, fontWeight: Weight.medium },
 });
 
@@ -468,7 +497,7 @@ const logStyles = StyleSheet.create({
   container: { alignItems: 'center', gap: Space.xl, paddingVertical: Space.base },
   totalWrapper: { alignItems: 'center', gap: Space.xs },
   checkmark: { fontSize: 20, fontWeight: Weight.bold },
-  total: { fontSize: 56, fontWeight: '800', lineHeight: 64 },
+  total: { fontSize: 56, fontWeight: Weight.heavy, lineHeight: 64 },
   reference: { fontSize: 13, fontWeight: Weight.medium },
   inputRow: { flexDirection: 'row', alignItems: 'center', gap: Space.base },
   input: {
@@ -479,8 +508,7 @@ const logStyles = StyleSheet.create({
   confirmBtn: {
     width: 48, height: 48, borderRadius: Radius.md,
     alignItems: 'center', justifyContent: 'center',
-    shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 3 },
-    elevation: 4,
+    ...Shadow.popover,
   },
   confirmBtnText: { color: '#fff', fontSize: 20, fontWeight: Weight.bold },
   actionsRow: { flexDirection: 'row', gap: Space.base },

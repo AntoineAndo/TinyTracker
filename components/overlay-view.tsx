@@ -4,7 +4,7 @@
 // readout below the chart pulls the matching Finding from useCorrelations
 // when one exists, so this view never disagrees with the Patterns section.
 
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Svg, { Line, Path } from 'react-native-svg';
 
@@ -16,6 +16,7 @@ import { useCorrelations } from '@/hooks/use-correlations';
 import { useCurrentDay } from '@/hooks/use-current-day';
 import { useDeferMount } from '@/hooks/use-defer-mount';
 import { AppTheme, useTheme } from '@/hooks/use-theme';
+import { buildPathBuilders } from '@/lib/chart-paths';
 import { Finding, findingWeight } from '@/lib/correlations';
 import { buildNormalizedSeries, lastNDayKeys } from '@/lib/series';
 import { getTrackerColorHex, getTrackerColorRgba } from '@/lib/tracker-colors';
@@ -32,6 +33,14 @@ const NEGATIVE_BORDER = 'rgba(239,68,68,0.35)';
 const CHART_W = 340;
 const CHART_H = 160;
 const CHART_PAD = 12;
+const CHART_GEOM = { width: CHART_W, height: CHART_H, pad: CHART_PAD } as const;
+const LEGEND_BAR_W = 14;
+const LEGEND_BAR_H = 3;
+// Series stroke + readout value lineHeight: idiosyncratic to this chart's
+// large display number rendering, so kept local rather than tokenized.
+const SERIES_STROKE = 2.4;
+const READOUT_LINE_HEIGHT = 38;
+const GRIDLINE_DASH = '2 3';
 
 function makeStyles(c: AppTheme) {
   return StyleSheet.create({
@@ -53,7 +62,7 @@ function makeStyles(c: AppTheme) {
     chart: { width: '100%', aspectRatio: CHART_W / CHART_H },
     legendRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: Space.xs },
     legendItem: { flexDirection: 'row', alignItems: 'center', gap: Space.xs },
-    legendBar: { width: 14, height: 3, borderRadius: 2 },
+    legendBar: { width: LEGEND_BAR_W, height: LEGEND_BAR_H, borderRadius: Radius.xs },
     legendText: { ...Type.caption, color: c.textSub },
     readoutCard: {
       borderRadius: Radius.lg,
@@ -63,11 +72,11 @@ function makeStyles(c: AppTheme) {
     },
     readoutKicker: { ...Type.overline },
     readoutValueRow: { flexDirection: 'row', alignItems: 'baseline', gap: Space.base, flexWrap: 'wrap' },
-    readoutValue: { ...Type.display, lineHeight: 38 },
+    readoutValue: { ...Type.display, lineHeight: READOUT_LINE_HEIGHT },
     readoutBadge: {
       backgroundColor: c.card,
       paddingHorizontal: Space.md,
-      paddingVertical: 4,
+      paddingVertical: Space.xs,
       borderRadius: Radius.pill,
       borderWidth: Border.hairline,
     },
@@ -76,68 +85,6 @@ function makeStyles(c: AppTheme) {
     readoutMuted: { ...Type.caption, color: c.textMuted },
     empty: { ...Type.bodyMd, color: c.textSub, textAlign: 'center', paddingVertical: Space.lg },
   });
-}
-
-/**
- * Build an SVG path from a normalized series, breaking the line wherever a
- * null value appears so we don't bridge across missing days.
- */
-function buildLinePath(values: (number | null)[]): string {
-  if (values.length === 0) return '';
-  const innerW = CHART_W - CHART_PAD * 2;
-  const innerH = CHART_H - CHART_PAD * 2;
-  const denom = values.length === 1 ? 1 : values.length - 1;
-
-  let d = '';
-  let pen = 'M';
-  for (let i = 0; i < values.length; i++) {
-    const v = values[i];
-    if (v === null) {
-      pen = 'M';
-      continue;
-    }
-    const x = CHART_PAD + (i / denom) * innerW;
-    const y = CHART_H - CHART_PAD - v * innerH;
-    d += `${pen} ${x.toFixed(1)} ${y.toFixed(1)} `;
-    pen = 'L';
-  }
-  return d.trim();
-}
-
-/**
- * Build a filled-area path (line + baseline closure). Each contiguous non-null
- * segment becomes its own closed sub-path so gaps don't paint a phantom area.
- */
-function buildAreaPath(values: (number | null)[]): string {
-  if (values.length === 0) return '';
-  const innerW = CHART_W - CHART_PAD * 2;
-  const innerH = CHART_H - CHART_PAD * 2;
-  const denom = values.length === 1 ? 1 : values.length - 1;
-  const baselineY = CHART_H - CHART_PAD;
-
-  let d = '';
-  let i = 0;
-  while (i < values.length) {
-    if (values[i] === null) { i++; continue; }
-    const startI = i;
-    let segment = '';
-    while (i < values.length) {
-      const v = values[i];
-      if (v === null) break;
-      const x = CHART_PAD + (i / denom) * innerW;
-      const y = CHART_H - CHART_PAD - v * innerH;
-      segment += `${i === startI ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)} `;
-      i++;
-    }
-    const lastI = i - 1;
-    // Skip degenerate single-point segments — no fillable area.
-    if (lastI === startI) continue;
-    const xLast = CHART_PAD + (lastI / denom) * innerW;
-    const xFirst = CHART_PAD + (startI / denom) * innerW;
-    segment += `L ${xLast.toFixed(1)} ${baselineY} L ${xFirst.toFixed(1)} ${baselineY} Z `;
-    d += segment;
-  }
-  return d.trim();
 }
 
 function findExistingFinding(findings: Finding[], aId: string, bId: string): Finding | undefined {
@@ -186,16 +133,23 @@ export function OverlayView({ windowDays = 30 }: OverlayViewProps) {
   );
 
   // Initial pair: top finding, else first two daily-eligible trackers, else
-  // first two of any kind. Computed once at mount via lazy state init so the
-  // user's explicit pick is never overwritten when `findings` re-resolves.
-  const initialPair = (): { a: string | null; b: string | null } => {
-    if (findings.length > 0) return { a: findings[0].trackerA.id, b: findings[0].trackerB.id };
-    if (dailyTrackers.length >= 2) return { a: dailyTrackers[0].id, b: dailyTrackers[1].id };
-    if (trackers.length >= 2) return { a: trackers[0].id, b: trackers[1].id };
-    return { a: null, b: null };
+  // first two of any kind. Computed once via paired lazy state initializers
+  // so the user's explicit pick is never overwritten when `findings`
+  // re-resolves. A ref shared between both initializers guarantees a single
+  // evaluation; React calls these initializers exactly once on mount.
+  const initialPairRef = useRef<{ a: string | null; b: string | null } | null>(null);
+  const computeInitialPair = (): { a: string | null; b: string | null } => {
+    if (initialPairRef.current) return initialPairRef.current;
+    let pair: { a: string | null; b: string | null };
+    if (findings.length > 0) pair = { a: findings[0].trackerA.id, b: findings[0].trackerB.id };
+    else if (dailyTrackers.length >= 2) pair = { a: dailyTrackers[0].id, b: dailyTrackers[1].id };
+    else if (trackers.length >= 2) pair = { a: trackers[0].id, b: trackers[1].id };
+    else pair = { a: null, b: null };
+    initialPairRef.current = pair;
+    return pair;
   };
-  const [aId, setAId] = useState<string | null>(() => initialPair().a);
-  const [bId, setBId] = useState<string | null>(() => initialPair().b);
+  const [aId, setAId] = useState<string | null>(() => computeInitialPair().a);
+  const [bId, setBId] = useState<string | null>(() => computeInitialPair().b);
 
   // If still null (initial render had no trackers loaded yet), adopt the
   // first available pair the moment trackers/findings show up.
@@ -246,6 +200,18 @@ export function OverlayView({ windowDays = 30 }: OverlayViewProps) {
     return findExistingFinding(findings, ta.id, tb.id);
   }, [findings, ta, tb]);
 
+  // Both series share the same x-domain (windowDays), so a single set of
+  // generators serves both sides. Length defaults to 1 to keep the scale
+  // safe when one series is empty. Memoized on n so we don't rebuild
+  // scales/generators on every render. Hoisted above the early returns
+  // below so the hook order stays stable across all render branches.
+  const seriesLen = Math.max(seriesA.length, seriesB.length, 1);
+  const builders = useMemo(() => buildPathBuilders(seriesLen, CHART_GEOM), [seriesLen]);
+  // Three evenly spaced gridlines between baseline and top, mapped through
+  // the y-scale so any future domain change automatically reflects in their
+  // y-positions.
+  const gridYs = useMemo(() => [0.25, 0.5, 0.75].map((g) => builders.yScale(g)), [builders]);
+
   if (trackers.length < 2 || !ta || !tb) {
     return (
       <View style={styles.container}>
@@ -260,7 +226,7 @@ export function OverlayView({ windowDays = 30 }: OverlayViewProps) {
     );
   }
 
-  // Skeleton on first paint — same outer chrome so layout stays stable when
+  // Skeleton on first paint: same outer chrome so layout stays stable when
   // the chart and readout swap in.
   if (!mounted) {
     return (
@@ -286,12 +252,10 @@ export function OverlayView({ windowDays = 30 }: OverlayViewProps) {
   const bg = positive ? POSITIVE_BG : NEGATIVE_BG;
   const border = positive ? POSITIVE_BORDER : NEGATIVE_BORDER;
 
-  const linePathA = buildLinePath(seriesA);
-  const linePathB = buildLinePath(seriesB);
-  const areaPathA = buildAreaPath(seriesA);
-  const areaPathB = buildAreaPath(seriesB);
-
-  const gridYs = [0.25, 0.5, 0.75].map((g) => CHART_H - CHART_PAD - g * (CHART_H - CHART_PAD * 2));
+  const linePathA = builders.linePath(seriesA) ?? '';
+  const linePathB = builders.linePath(seriesB) ?? '';
+  const areaPathA = builders.areaPath(seriesA) ?? '';
+  const areaPathB = builders.areaPath(seriesB) ?? '';
 
   return (
     <View style={styles.container}>
@@ -316,16 +280,16 @@ export function OverlayView({ windowDays = 30 }: OverlayViewProps) {
                 y1={y} y2={y}
                 stroke={c.border}
                 strokeWidth={1}
-                strokeDasharray="2 3"
+                strokeDasharray={GRIDLINE_DASH}
               />
             ))}
             {areaPathA !== '' && <Path d={areaPathA} fill={fillA} />}
             {areaPathB !== '' && <Path d={areaPathB} fill={fillB} />}
             {linePathA !== '' && (
-              <Path d={linePathA} fill="none" stroke={colorA} strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" />
+              <Path d={linePathA} fill="none" stroke={colorA} strokeWidth={SERIES_STROKE} strokeLinecap="round" strokeLinejoin="round" />
             )}
             {linePathB !== '' && (
-              <Path d={linePathB} fill="none" stroke={colorB} strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" />
+              <Path d={linePathB} fill="none" stroke={colorB} strokeWidth={SERIES_STROKE} strokeLinecap="round" strokeLinejoin="round" />
             )}
           </Svg>
         </View>
@@ -363,7 +327,7 @@ export function OverlayView({ windowDays = 30 }: OverlayViewProps) {
             Not a strong enough pattern to call yet.
           </Text>
           <Text style={styles.readoutMuted}>
-            Keep logging — patterns appear once both trackers have ~14+ overlapping days.
+            Keep logging. Patterns appear once both trackers have ~14+ overlapping days.
           </Text>
         </View>
       )}

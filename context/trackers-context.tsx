@@ -4,17 +4,20 @@
 // so consumers do not recompute it (project rule, see CLAUDE.md).
 import { randomUUID } from 'expo-crypto';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { AppState } from 'react-native';
 
 import { useSettings } from '@/context/settings-context';
 import { MOCK_ENTRIES, MOCK_TRACKERS } from '@/lib/mock-data';
 import {
   getChunk,
+  getDismissedToday,
   getIndex,
   getTrackers,
   loadChunk,
   loadInitialEntries,
   migrateIfNeeded,
   saveChunk,
+  saveDismissedToday,
   saveIndex,
   saveLoadedEntries,
   saveTrackers,
@@ -45,6 +48,13 @@ interface TrackersContextValue {
   updateEntry: (id: string, value: boolean | number) => Promise<void>;
   completeEntry: (id: string) => Promise<void>;
   deleteEntry: (id: string) => Promise<void>;
+  /** Tracker IDs swiped away on today's logical day; auto-clears at day rollover. */
+  dismissedTodayIds: Set<string>;
+  dismissTrackerForToday: (trackerId: string) => Promise<void>;
+  restoreTrackerForToday: (trackerId: string) => Promise<void>;
+  /** Re-reads dismissed-today from storage. Call when the foreground logical
+   *  day boundary crosses (storage will self-clear if the date changed). */
+  refreshDismissedToday: () => Promise<void>;
 }
 
 const TrackersContext = createContext<TrackersContextValue | null>(null);
@@ -63,6 +73,7 @@ export function TrackersProvider({ children }: { children: React.ReactNode }) {
   const [chunkIndex, setChunkIndex] = useState<ChunkIndex>([]);
   const [loadedChunkCount, setLoadedChunkCount] = useState(1);
   const [mockMode, setMockMode] = useState(false);
+  const [dismissedTodayIds, setDismissedTodayIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     async function load() {
@@ -136,7 +147,22 @@ export function TrackersProvider({ children }: { children: React.ReactNode }) {
     );
 
     setRealEntries((prev) => prev.filter((e) => e.trackerId !== id));
-  }, [realTrackers]);
+
+    // Drop the deleted tracker from the dismissed-today set so the stored
+    // record never references trackers that no longer exist. Functional
+    // updater so a concurrent swipe-dismiss cannot reintroduce the id.
+    let nextDismissed: Set<string> | null = null;
+    setDismissedTodayIds((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      nextDismissed = next;
+      return next;
+    });
+    if (nextDismissed) {
+      await persistDismissedToday(nextDismissed, dayStartHour);
+    }
+  }, [realTrackers, dayStartHour]);
 
   // ── Entry mutations ─────────────────────────────────────────────────────────
 
@@ -208,6 +234,75 @@ export function TrackersProvider({ children }: { children: React.ReactNode }) {
     await saveLoadedEntries(chunkIndex, updated, dayStartHour);
   }, [chunkIndex, dayStartHour]);
 
+  // ── Dismissed-today (swipe to hide for the rest of the logical day) ─────────
+  // Storage is the canonical record; in-memory state mirrors it. `getDismissed-
+  // Today` self-clears the stored record when the logical day no longer
+  // matches, so re-hydrating on foreground / day-start change handles rollover
+  // automatically. A pending-write counter prevents foreground re-hydration
+  // from clobbering an in-flight save.
+  const dismissedWritesPendingRef = useRef(0);
+
+  const persistDismissedToday = useCallback(async (ids: Set<string>, startHour: number) => {
+    dismissedWritesPendingRef.current += 1;
+    try {
+      await saveDismissedToday([...ids], startHour);
+    } finally {
+      dismissedWritesPendingRef.current -= 1;
+    }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function hydrate() {
+      // Skip if a write is in flight: storage may not yet reflect the pending
+      // change, and clobbering local state would re-show a tracker the user
+      // just swiped away.
+      if (dismissedWritesPendingRef.current > 0) return;
+      const ids = await getDismissedToday(dayStartHour);
+      if (!cancelled) setDismissedTodayIds(new Set(ids));
+    }
+    hydrate();
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') hydrate();
+    });
+    return () => { cancelled = true; sub.remove(); };
+  }, [dayStartHour]);
+
+  const dismissTrackerForToday = useCallback(async (trackerId: string) => {
+    // Functional updater so concurrent dismissals/deletes compose correctly.
+    let nextSet: Set<string> | null = null;
+    setDismissedTodayIds((prev) => {
+      if (prev.has(trackerId)) return prev;
+      const next = new Set(prev);
+      next.add(trackerId);
+      nextSet = next;
+      return next;
+    });
+    if (nextSet) {
+      await persistDismissedToday(nextSet, dayStartHour);
+    }
+  }, [dayStartHour, persistDismissedToday]);
+
+  const restoreTrackerForToday = useCallback(async (trackerId: string) => {
+    let nextSet: Set<string> | null = null;
+    setDismissedTodayIds((prev) => {
+      if (!prev.has(trackerId)) return prev;
+      const next = new Set(prev);
+      next.delete(trackerId);
+      nextSet = next;
+      return next;
+    });
+    if (nextSet) {
+      await persistDismissedToday(nextSet, dayStartHour);
+    }
+  }, [dayStartHour, persistDismissedToday]);
+
+  const refreshDismissedToday = useCallback(async () => {
+    if (dismissedWritesPendingRef.current > 0) return;
+    const ids = await getDismissedToday(dayStartHour);
+    setDismissedTodayIds(new Set(ids));
+  }, [dayStartHour]);
+
   // ── Load more ───────────────────────────────────────────────────────────────
 
   const loadMoreEntries = useCallback(async () => {
@@ -227,6 +322,7 @@ export function TrackersProvider({ children }: { children: React.ReactNode }) {
       mockMode, setMockMode,
       addTracker, updateTracker, deleteTracker,
       addEntry, addEntryForDate, updateEntry, completeEntry, deleteEntry,
+      dismissedTodayIds, dismissTrackerForToday, restoreTrackerForToday, refreshDismissedToday,
     }}>
       {children}
     </TrackersContext.Provider>
