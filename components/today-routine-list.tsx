@@ -26,8 +26,13 @@ type TodayRoutineListProps = {
 };
 
 export function TodayRoutineList({ today }: TodayRoutineListProps) {
-  const { trackers, addEntry, updateEntry, completeEntry } = useTrackers();
-  const { routines, isRoutineCompleted, markAllDone, currentPeriodEntryMap } = useRoutines();
+  const { trackers, addEntry, updateEntry, completeEntry, isLoading: trackersLoading } = useTrackers();
+  const { routines, isRoutineCompleted, markAllDone, currentPeriodEntryMap, isLoading: routinesLoading } = useRoutines();
+  // Wait for both contexts to hydrate before classifying routines as
+  // "completed on arrival": otherwise a routine can be momentarily seen as
+  // incomplete (entries not yet loaded), recorded in the seen set, and then
+  // animate out once entries hydrate.
+  const hydrated = !trackersLoading && !routinesLoading;
   const animationsEnabled = useAnimationsEnabled();
 
   // Day-of-week in Routine.days convention: 0 = Monday, 6 = Sunday.
@@ -45,6 +50,10 @@ export function TodayRoutineList({ today }: TodayRoutineListProps) {
   // Tracks routines whose dismiss has already been scheduled, so rapid re-renders
   // (or onAllDone firing on mount for already-done routines) don't double-schedule.
   const handledRoutineIds = useRef<Set<string>>(new Set());
+  // Routines we've observed as incomplete during the current day session. Only
+  // these are eligible for the linger+exit animation; routines that are already
+  // completed when we first see them are hidden immediately with no animation.
+  const seenIncompleteRoutineIds = useRef<Set<string>>(new Set());
 
   // Reset card-level dismiss state on day change so completed routines reappear the next day
   const prevTodayDowRef = useRef(todayDow);
@@ -54,28 +63,59 @@ export function TodayRoutineList({ today }: TodayRoutineListProps) {
       doneTimers.current.forEach(clearTimeout);
       doneTimers.current.clear();
       handledRoutineIds.current.clear();
+      seenIncompleteRoutineIds.current.clear();
       setExitingRoutineIds(new Set());
       setHiddenRoutineIds(new Set());
     }
   }, [todayDow]);
+
+  // Record routines currently incomplete so subsequent completion triggers the animation;
+  // routines completed before we ever saw them incomplete stay filtered out silently.
+  // Gated on hydration to avoid mis-classifying routines while entries are still loading.
+  if (hydrated) {
+    for (const r of activeRoutines) {
+      if (!seenIncompleteRoutineIds.current.has(r.id) && !isRoutineCompleted(r)) {
+        seenIncompleteRoutineIds.current.add(r.id);
+      }
+    }
+  }
 
   useEffect(() => {
     return () => { doneTimers.current.forEach(clearTimeout); };
   }, []);
 
   const visibleRoutines = useMemo(
-    () => activeRoutines.filter((r) => !hiddenRoutineIds.has(r.id)),
-    [activeRoutines, hiddenRoutineIds],
+    () => {
+      // Render nothing until both contexts hydrate; prevents the "completed routine
+      // flashes then animates out" bug when entries arrive after routines.
+      if (!hydrated) return [];
+      return activeRoutines.filter((r) => {
+        if (hiddenRoutineIds.has(r.id)) return false;
+        // Skip routines that were already completed before we saw them incomplete:
+        // they shouldn't flash on screen and then animate out.
+        if (!seenIncompleteRoutineIds.current.has(r.id) && isRoutineCompleted(r)) return false;
+        return true;
+      });
+    },
+    [hydrated, activeRoutines, hiddenRoutineIds, isRoutineCompleted],
   );
 
   // Prune stale routine IDs from the hidden set (e.g. routine deleted, or restored after import)
   useEffect(() => {
+    const activeIds = new Set(activeRoutines.map((r) => r.id));
     setHiddenRoutineIds((prev) => {
       if (prev.size === 0) return prev;
-      const activeIds = new Set(activeRoutines.map((r) => r.id));
       const next = new Set([...prev].filter((id) => activeIds.has(id)));
       return next.size === prev.size ? prev : next;
     });
+    // Mirror the prune for our refs so a deleted-then-recreated routine
+    // doesn't carry stale "seen/handled" state.
+    for (const id of [...seenIncompleteRoutineIds.current]) {
+      if (!activeIds.has(id)) seenIncompleteRoutineIds.current.delete(id);
+    }
+    for (const id of [...handledRoutineIds.current]) {
+      if (!activeIds.has(id)) handledRoutineIds.current.delete(id);
+    }
   }, [activeRoutines]);
 
   // Minutes since midnight - compared against routine start/end to detect active window.
