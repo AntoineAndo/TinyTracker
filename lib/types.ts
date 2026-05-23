@@ -57,9 +57,25 @@ export type ChunkIndex = ChunkMeta[];
 
 export interface RoutineTracker {
   id: string;
-  /** For count trackers only: how many completions satisfy this routine.
-   *  Defaults to the tracker's own target when absent. */
+  /** For count trackers only: the relative contribution this routine is expected to add to the
+   *  tracker's count. "Mark all ✓" increments the entry value by this amount (capped at the
+   *  tracker's own target). Defaults to the tracker's own target when absent. */
   routineTarget?: number;
+}
+
+// Tracks how much a routine has actually contributed to a count tracker during the current
+// period. One record per (routineId, trackerId, period) — written by markAllDone and by
+// manual +1 clicks made from inside a RoutineCard. Used to decide when a routine is
+// "completed" without overcounting unrelated edits to the underlying tracker entry.
+export interface RoutineProgress {
+  id: string;
+  routineId: string;
+  trackerId: string;
+  amount: number;
+  createdAt: string;
+  /** Frozen dayStartHour at write time, mirroring Entry semantics so the record buckets
+   *  into the same logical day even if the user later changes the setting. */
+  dayStartHour: number;
 }
 
 export interface Routine {

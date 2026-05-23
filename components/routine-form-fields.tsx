@@ -94,7 +94,6 @@ export function makeRoutineFormStyles(c: AppTheme) {
     },
     targetBtnText: { fontSize: 16, color: c.text, lineHeight: 20 },
     targetValue: { fontSize: 15, fontWeight: Weight.semibold, color: c.text, minWidth: 28, textAlign: 'center' },
-    targetFraction: { fontSize: 12, color: c.textSub },
     emptyTrackers: { fontSize: 14, color: c.textSub, fontStyle: 'italic', textAlign: 'center', paddingVertical: Space.md },
     saveButton: { borderRadius: Radius.md, paddingVertical: Space.lg, alignItems: 'center', marginTop: Space.md },
     saveButtonDisabled: { opacity: 0.4 },
@@ -197,10 +196,12 @@ export function RoutineFormFields({ control, setValue, trackers, startHour, star
                         </View>
                       </Pressable>
 
-                      {/* Routine target stepper — only for selected count trackers with target > 1 */}
+                      {/* Adds-to-count stepper — only for selected count trackers with target > 1.
+                          The value is how many counts this routine contributes when the user taps
+                          "Mark all ✓" (and how many count toward this routine's completion). */}
                       {selected && isCount && fullTarget > 1 && (
                         <View style={styles.targetRow}>
-                          <Text style={styles.targetLabel}>Routine target</Text>
+                          <Text style={styles.targetLabel}>Adds to count</Text>
                           <View style={styles.targetStepper}>
                             <Pressable style={styles.targetBtn} onPress={() => setTarget(-1)}>
                               <Text style={styles.targetBtnText}>−</Text>
@@ -209,7 +210,6 @@ export function RoutineFormFields({ control, setValue, trackers, startHour, star
                             <Pressable style={styles.targetBtn} onPress={() => setTarget(+1)}>
                               <Text style={styles.targetBtnText}>+</Text>
                             </Pressable>
-                            <Text style={styles.targetFraction}>/ {fullTarget}</Text>
                           </View>
                         </View>
                       )}

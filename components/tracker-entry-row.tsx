@@ -5,9 +5,9 @@ import { memo, useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View, ViewStyle, StyleProp } from 'react-native';
 
 import { StreakBadge } from '@/components/streak-badge';
-import { CompletedValue, isCompleted, QuickAction } from '@/components/today-tracker-list-action';
+import { CompletedValue, QuickAction } from '@/components/today-tracker-list-action';
 import { Radius, Shadow, Size, Space, Type } from '@/constants/tokens';
-import { isCheckboxControl } from '@/lib/tracker-utils';
+import { isCheckboxControl, isCompleted, isRoutineTrackerCompleted } from '@/lib/tracker-utils';
 import { AppTheme, useTheme } from '@/hooks/use-theme';
 import { getTrackerColorRgba } from '@/lib/tracker-colors';
 import { getTrackerIcon } from '@/lib/tracker-icons';
@@ -63,6 +63,10 @@ type Props = {
   style?: StyleProp<ViewStyle>;
   /** Per-routine target override for count trackers. Overrides tracker.target for completion and display. */
   routineTarget?: number;
+  /** Amount the surrounding routine has already contributed to this count tracker. When provided
+   *  (i.e. row is rendered inside a RoutineCard), completion and the progress label switch to the
+   *  routine-relative model: routine is done when contribution >= routineTarget. */
+  routineProgress?: number;
 };
 
 export const TrackerEntryRow = memo(function TrackerEntryRow({
@@ -77,10 +81,15 @@ export const TrackerEntryRow = memo(function TrackerEntryRow({
   variant = 'card',
   style,
   routineTarget,
+  routineProgress,
 }: Props) {
   const c = useTheme();
   const styles = useMemo(() => makeStyles(c), [c]);
-  const done = isCompleted(tracker, entry, routineTarget) && !isPendingDismiss;
+  // Inside a routine (routineProgress provided) completion is relative to the routine's
+  // recorded contribution; everywhere else use the tracker's own completion rule.
+  const done = (routineProgress !== undefined
+    ? isRoutineTrackerCompleted(tracker, entry, routineTarget, routineProgress)
+    : isCompleted(tracker, entry)) && !isPendingDismiss;
   const iconBg = getTrackerColorRgba(tracker.color, 0.15);
 
   const content = (
@@ -102,8 +111,10 @@ export const TrackerEntryRow = memo(function TrackerEntryRow({
             Other trackers switch to CompletedValue when done (if showCompleted). */}
         {(() => {
           const showControl = isCheckboxControl(tracker, routineTarget) || !done;
-          if (showControl) return <QuickAction tracker={tracker} entry={entry} onSave={onSave} onComplete={onComplete} routineTarget={routineTarget} />;
-          if (done && showCompleted) return <CompletedValue tracker={tracker} entry={entry!} routineTarget={routineTarget} />;
+          if (showControl) return <QuickAction tracker={tracker} entry={entry} onSave={onSave} onComplete={onComplete} routineTarget={routineTarget} routineProgress={routineProgress} />;
+          // Guard against routine-progress-only completion (progress >= routineTarget with no
+          // entry yet): without an entry there is no value to display so render nothing.
+          if (done && showCompleted && entry) return <CompletedValue tracker={tracker} entry={entry} routineTarget={routineTarget} routineProgress={routineProgress} />;
           return null;
         })()}
       </View>

@@ -18,7 +18,7 @@ import { useTrackers } from '@/context/trackers-context';
 import { useAnimationsEnabled } from '@/hooks/use-animations-enabled';
 import { AppTheme, useTheme } from '@/hooks/use-theme';
 import { useCurrentDay } from '@/hooks/use-current-day';
-import { DAY_NAMES_JS } from '@/lib/dates';
+import { DAY_NAMES_JS, toRoutineDayOfWeek } from '@/lib/dates';
 import { COMPLETION_CELEBRATION_MS } from '@/lib/tracker-utils';
 import { Entry, Tracker } from '@/lib/types';
 import { getStreak, nextDueDate, trackerInterval } from '@/lib/utils';
@@ -100,7 +100,7 @@ export default function TodayScreen() {
     [allTrackers, dismissedTodayIds],
   );
   // currentPeriodEntryMap is still needed here for streak computation and the main tracker handlers.
-  const { currentPeriodEntryMap } = useRoutines();
+  const { currentPeriodEntryMap, routines, isRoutineCompleted } = useRoutines();
   const { characterConfig, userName } = useSettings();
   const [showAll, setShowAll] = useState(false);
   const [showHidden, setShowHidden] = useState(false);
@@ -248,6 +248,13 @@ export default function TodayScreen() {
     () => trackers.filter((t) => isCompleted(t, currentPeriodEntryMap[t.id])),
     [trackers, currentPeriodEntryMap],
   );
+
+  // Routines scheduled for today that the user has finished — render alongside
+  // completed trackers under the same "X completed" section toggle.
+  const completedRoutinesCount = useMemo(() => {
+    const todayDow = toRoutineDayOfWeek(today);
+    return routines.filter((r) => r.days.includes(todayDow) && isRoutineCompleted(r)).length;
+  }, [routines, today, isRoutineCompleted]);
 
   function scheduleDismiss(trackerId: string, delay: number) {
     // Cancel any outstanding timer for the same tracker.
@@ -471,28 +478,33 @@ export default function TodayScreen() {
           />
         )}
 
-        {/* Completed section toggle + list */}
+        {/* Completed section toggle + list — counts both finished trackers and routines */}
         {!isLoading && trackers.length > 0 && (
           <View style={styles.completedRow}>
-            <Text style={styles.completedLabel}>{completedTrackers.length} completed</Text>
+            <Text style={styles.completedLabel}>{completedTrackers.length + completedRoutinesCount} completed</Text>
             <Pressable onPress={() => setShowAll((v) => !v)}>
               <Text style={styles.completedToggleText}>{showAll ? 'Hide' : 'Show'} →</Text>
             </Pressable>
           </View>
         )}
-        {showAll && completedTrackers.length > 0 && (
-          <TodayTrackerList
-            trackers={completedTrackers}
-            entryMap={currentPeriodEntryMap}
-            streakMap={streakMap}
-            showCompleted={true}
-            exitingIds={new Set()}
-            pendingDismissIds={new Set()}
-            onSave={handleSave}
-            onComplete={handleComplete}
-            onEdit={(tracker, entry) => { setEditingTracker(tracker); setEditingEntry(entry); }}
-            onExited={() => {}}
-          />
+        {showAll && (
+          <>
+            <TodayRoutineList today={today} filter="completed" />
+            {completedTrackers.length > 0 && (
+              <TodayTrackerList
+                trackers={completedTrackers}
+                entryMap={currentPeriodEntryMap}
+                streakMap={streakMap}
+                showCompleted={true}
+                exitingIds={new Set()}
+                pendingDismissIds={new Set()}
+                onSave={handleSave}
+                onComplete={handleComplete}
+                onEdit={(tracker, entry) => { setEditingTracker(tracker); setEditingEntry(entry); }}
+                onExited={() => {}}
+              />
+            )}
+          </>
         )}
       </ScrollView>
 
