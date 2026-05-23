@@ -1,15 +1,14 @@
 // Card UI for a single routine - displays its name, time window, tracker rows, and a "Mark all done" action.
-// Individual rows slide out (height collapse + fade) when their tracker completes, mirroring the today list behavior.
+// Completed rows transition to their "done" state (CompletedValue / checked checkbox) in place; the
+// card itself stays mounted all day so the user can see what they've finished.
 import { LinearGradient } from 'expo-linear-gradient';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { AnimatedExitRow, ReboundTrigger, reboundDelay } from '@/components/animated-exit-row';
 import { TrackerEntryRow } from '@/components/tracker-entry-row';
 import { Border, Radius, Space, Type } from '@/constants/tokens';
-import { useAnimationsEnabled } from '@/hooks/use-animations-enabled';
 import { AppTheme, useTheme } from '@/hooks/use-theme';
-import { COMPLETION_CELEBRATION_MS, isCompleted } from '@/lib/tracker-utils';
+import { COMPLETION_CELEBRATION_MS, isRoutineTrackerCompleted } from '@/lib/tracker-utils';
 import { Entry, Routine, Tracker } from '@/lib/types';
 import { hexToRgb } from '@/lib/utils';
 
@@ -17,13 +16,16 @@ type RoutineCardProps = {
   routine: Routine;
   trackers: Tracker[];
   entryMap: Record<string, Entry>;
+  /** [trackerId] = amount this routine has contributed to count trackers in the current period */
+  progressMap: Record<string, number>;
   isActive: boolean;
   isDone: boolean;
+  /** True when this routine has any current-period progress that could be undone. */
+  hasProgress: boolean;
   onMarkAllDone: () => void;
+  onReset: () => void;
   onSave: (tracker: Tracker, value: number) => void;
   onComplete: (tracker: Tracker) => void;
-  // Called with this routine's id when isDone is true and no row animations are in flight
-  onAllDone?: (routineId: string) => void;
 };
 
 // Pick an emoji based on the routine's start hour
@@ -76,7 +78,16 @@ function makeStyles(c: AppTheme) {
       borderRadius: Radius.pill,
     },
     markAllBtnText: { ...Type.caption, fontWeight: '700', color: c.background },
+    allDoneRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
     allDoneText: { fontSize: 13, fontWeight: '700', color: '#22c55e' },
+    resetBtn: {
+      paddingHorizontal: Space.base,
+      paddingVertical: Space.sm,
+      borderRadius: Radius.pill,
+      borderWidth: Border.hairline,
+      borderColor: c.border,
+    },
+    resetBtnText: { ...Type.caption, fontWeight: '600', color: c.textSub },
     rowGap: { height: Space.md },
     row: {
       backgroundColor: rowBg,
@@ -91,58 +102,25 @@ function makeStyles(c: AppTheme) {
 const GRADIENT_LIGHT: [string, string] = ['#FFE4DA', '#FCE9C4'];
 const GRADIENT_DARK:  [string, string] = ['#3A1E18', '#3E2D0B'];
 
-export function RoutineCard({ routine, trackers, entryMap, isActive, isDone, onMarkAllDone, onSave, onComplete, onAllDone }: RoutineCardProps) {
+export function RoutineCard({ routine, trackers, entryMap, progressMap, isActive, isDone, hasProgress, onMarkAllDone, onReset, onSave, onComplete }: RoutineCardProps) {
   const c = useTheme();
+  // The card auto-expands whenever it's inside its active time window. Outside the window
+  // the user can tap the header to expand or collapse it manually.
+  const [manuallyExpanded, setManuallyExpanded] = useState(false);
+  const expanded = isActive || manuallyExpanded;
+
+  const toggleExpanded = useCallback(() => {
+    if (isActive) return; // active routines stay open by definition
+    setManuallyExpanded((v) => !v);
+  }, [isActive]);
   const styles = useMemo(() => makeStyles(c), [c]);
   const gradientColors = c.scheme === 'dark' ? GRADIENT_DARK : GRADIENT_LIGHT;
-  const animationsEnabled = useAnimationsEnabled();
 
+  // Rows that just completed and are showing the brief celebration before settling into
+  // their final "done" presentation. Tracked in a ref so the cleanup timeout can be
+  // cancelled on unmount.
   const [pendingDismissIds, setPendingDismissIds] = useState<Set<string>>(new Set());
-  const [exitingIds, setExitingIds] = useState<Set<string>>(new Set());
-  // Rows fully animated out - kept hidden even though they remain in the trackers prop
-  const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
-  const [reboundMap, setReboundMap] = useState<Record<string, ReboundTrigger>>({});
-
   const dismissTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
-  const reboundVersionsRef = useRef<Record<string, number>>({});
-  const prevExitingRef = useRef(new Set<string>());
-
-  const visibleTrackers = useMemo(
-    () => trackers.filter((t) => !hiddenIds.has(t.id)),
-    [trackers, hiddenIds],
-  );
-  const visibleTrackersRef = useRef(visibleTrackers);
-  visibleTrackersRef.current = visibleTrackers;
-
-  // When a row starts exiting, spring-animate the siblings below it
-  useEffect(() => {
-    const newlyExiting = [...exitingIds].filter((id) => !prevExitingRef.current.has(id));
-    if (newlyExiting.length === 0) {
-      prevExitingRef.current = new Set(exitingIds);
-      return;
-    }
-
-    const list = visibleTrackersRef.current;
-    const updates: Record<string, ReboundTrigger> = {};
-
-    for (const exitId of newlyExiting) {
-      const exitIndex = list.findIndex((t) => t.id === exitId);
-      if (exitIndex === -1) continue;
-      list.forEach((t, i) => {
-        if (i > exitIndex && !exitingIds.has(t.id)) {
-          const version = (reboundVersionsRef.current[t.id] ?? 0) + 1;
-          reboundVersionsRef.current[t.id] = version;
-          updates[t.id] = { version, delay: reboundDelay(i - exitIndex - 1) };
-        }
-      });
-    }
-
-    if (Object.keys(updates).length > 0) {
-      setReboundMap((prev) => ({ ...prev, ...updates }));
-    }
-
-    prevExitingRef.current = new Set(exitingIds);
-  }, [exitingIds]);
 
   useEffect(() => {
     return () => {
@@ -150,23 +128,23 @@ export function RoutineCard({ routine, trackers, entryMap, isActive, isDone, onM
     };
   }, []);
 
-  // Prune hiddenIds when a tracker is no longer completed (e.g. day rollover, entry edit)
-  // so rows correctly reappear if the underlying data changes.
-  useEffect(() => {
-    setHiddenIds((prev) => {
-      if (prev.size === 0) return prev;
-      const next = new Set<string>();
-      for (const id of prev) {
-        const t = trackers.find((tr) => tr.id === id);
-        const rt = routine.trackers.find((r) => r.id === id);
-        if (t && isCompleted(t, entryMap[id], rt?.routineTarget)) next.add(id);
-      }
-      return next.size === prev.size ? prev : next;
-    });
-  }, [trackers, entryMap, routine.trackers]);
+  // Confirm before resetting — reset deletes the current-period entry for non-count
+  // trackers, so the user can't recover any boolean/log/range data they entered manually
+  // outside this routine session.
+  const confirmReset = useCallback(() => {
+    Alert.alert(
+      `Reset ${routine.name}?`,
+      "This will undo this routine's progress for today.",
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Reset', style: 'destructive', onPress: onReset },
+      ],
+    );
+  }, [routine.name, onReset]);
 
   const handleRowComplete = useCallback((tracker: Tracker) => {
-    // Persist the completion immediately, then drive the celebration + exit animation locally
+    // Persist the completion immediately and flash the celebration; the row stays mounted
+    // and switches to its done presentation when the timer clears.
     onComplete(tracker);
 
     const id = tracker.id;
@@ -177,31 +155,21 @@ export function RoutineCard({ routine, trackers, entryMap, isActive, isDone, onM
     const timer = setTimeout(() => {
       dismissTimers.current.delete(id);
       setPendingDismissIds((prev) => { const n = new Set(prev); n.delete(id); return n; });
-      setExitingIds((prev) => new Set([...prev, id]));
     }, COMPLETION_CELEBRATION_MS);
     dismissTimers.current.set(id, timer);
   }, [onComplete]);
 
-  const handleExited = useCallback((id: string) => {
-    setExitingIds((prev) => { const n = new Set(prev); n.delete(id); return n; });
-    setHiddenIds((prev) => new Set([...prev, id]));
-  }, []);
-
-  // Signal the parent to remove the card once done and no row animation is in flight.
-  // Fires on mount too so already-completed routines animate out on app restart.
-  // Idempotency is guaranteed by the parent's handledRoutineIds ref.
-  useEffect(() => {
-    if (isDone && pendingDismissIds.size === 0 && exitingIds.size === 0) {
-      onAllDone?.(routine.id);
-    }
-  }, [isDone, pendingDismissIds.size, exitingIds.size, onAllDone]);
-
-  // Exclude animating/hidden trackers from the pending count shown in the subtitle
-  const pendingCount = trackers.filter((t) => {
-    if (hiddenIds.has(t.id) || pendingDismissIds.has(t.id) || exitingIds.has(t.id)) return false;
-    const rt = routine.trackers.find((r) => r.id === t.id);
-    return !isCompleted(t, entryMap[t.id], rt?.routineTarget);
-  }).length;
+  // Count how many trackers in the routine are still pending. Trackers currently mid-
+  // celebration are also counted as pending so the subtitle doesn't jump down before the
+  // row has settled into its done state.
+  const pendingCount = useMemo(
+    () => trackers.filter((t) => {
+      if (pendingDismissIds.has(t.id)) return true;
+      const rt = routine.trackers.find((r) => r.id === t.id);
+      return !isRoutineTrackerCompleted(t, entryMap[t.id], rt?.routineTarget, progressMap[t.id] ?? 0);
+    }).length,
+    [trackers, pendingDismissIds, routine.trackers, entryMap, progressMap],
+  );
 
   const subtitle = isActive
     ? `Until ${formatTime(routine.endHour, routine.endMinute)} · ${pendingCount} left`
@@ -215,35 +183,47 @@ export function RoutineCard({ routine, trackers, entryMap, isActive, isDone, onM
         end={{ x: 1, y: 1 }}
         style={styles.cardInner}
       >
-        <View style={styles.header}>
+        <Pressable
+          style={styles.header}
+          onPress={toggleExpanded}
+          // Active routines are always expanded — the press would be a no-op so skip the
+          // pressed-state feedback entirely for that case.
+          disabled={isActive}
+        >
           <Text style={styles.emoji}>{routineEmoji(routine.startHour)}</Text>
           <View style={styles.headerText}>
             <Text style={styles.title}>{routine.name}</Text>
             <Text style={styles.subtitle}>{subtitle}</Text>
           </View>
           {isDone ? (
-            <Text style={styles.allDoneText}>All done ✓</Text>
+            <View style={styles.allDoneRow}>
+              <Pressable style={styles.resetBtn} onPress={confirmReset}>
+                <Text style={styles.resetBtnText}>Reset</Text>
+              </Pressable>
+              <Text style={styles.allDoneText}>All done ✓</Text>
+            </View>
           ) : (
-            <Pressable
-              style={styles.markAllBtn}
-              onPress={onMarkAllDone}
-            >
-              <Text style={styles.markAllBtnText}>Mark all ✓</Text>
-            </Pressable>
+            <View style={styles.allDoneRow}>
+              {hasProgress && (
+                <Pressable style={styles.resetBtn} onPress={confirmReset}>
+                  <Text style={styles.resetBtnText}>Reset</Text>
+                </Pressable>
+              )}
+              <Pressable style={styles.markAllBtn} onPress={onMarkAllDone}>
+                <Text style={styles.markAllBtnText}>Mark all ✓</Text>
+              </Pressable>
+            </View>
           )}
-        </View>
+        </Pressable>
 
-        <View>
-          {visibleTrackers.map((tracker, index) => {
+        {/* Outside the routine's time window the card is collapsed to its header. Tapping
+            the header toggles `manuallyExpanded` so the user can peek at the trackers
+            ahead/after the window. Active routines are always expanded. */}
+        {expanded && <View>
+          {trackers.map((tracker, index) => {
             const rt = routine.trackers.find((r) => r.id === tracker.id);
             return (
-              <AnimatedExitRow
-                key={tracker.id}
-                exiting={exitingIds.has(tracker.id)}
-                onExited={() => handleExited(tracker.id)}
-                animationsEnabled={animationsEnabled}
-                rebound={reboundMap[tracker.id]}
-              >
+              <View key={tracker.id}>
                 <View style={styles.row}>
                   <TrackerEntryRow
                     tracker={tracker}
@@ -255,14 +235,14 @@ export function RoutineCard({ routine, trackers, entryMap, isActive, isDone, onM
                     onComplete={() => handleRowComplete(tracker)}
                     variant="inset"
                     routineTarget={rt?.routineTarget}
+                    routineProgress={progressMap[tracker.id] ?? 0}
                   />
                 </View>
-                {/* Gap collapses with the row so spacing doesn't persist after exit */}
-                {index < visibleTrackers.length - 1 && <View style={styles.rowGap} />}
-              </AnimatedExitRow>
+                {index < trackers.length - 1 && <View style={styles.rowGap} />}
+              </View>
             );
           })}
-        </View>
+        </View>}
       </LinearGradient>
     </View>
   );

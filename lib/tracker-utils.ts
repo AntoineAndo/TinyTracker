@@ -38,6 +38,25 @@ export function isCheckboxControl(tracker: Tracker, routineTarget?: number): boo
 }
 
 /**
+ * Returns true when a routine considers a tracker "done" under the relative-routineTarget model.
+ * For count trackers, the routine is complete when its recorded contribution reaches the routine
+ * target, OR when the tracker's own daily target has been reached (so a fully-completed tracker
+ * always reads as done across every routine it belongs to). Non-count types defer to `isCompleted`.
+ */
+export function isRoutineTrackerCompleted(
+  tracker: Tracker,
+  entry: Entry | undefined,
+  routineTarget: number | undefined,
+  routineProgress: number,
+): boolean {
+  if (tracker.type !== 'count') return isCompleted(tracker, entry);
+  const effectiveTarget = routineTarget ?? tracker.target ?? 1;
+  if (routineProgress >= effectiveTarget) return true;
+  if (entry && toNumericValue(entry.value) >= (tracker.target ?? effectiveTarget)) return true;
+  return false;
+}
+
+/**
  * Returns true when saving `value` for this tracker would complete it.
  * Used to decide whether to trigger the celebration-then-dismiss animation.
  * Pass `routineTarget` when the tracker is inside a routine so the effective

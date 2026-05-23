@@ -78,7 +78,7 @@ function CheckboxControl({ checked, colorHex, onPress }: { checked: boolean; col
 
 // ── CompletedValue ────────────────────────────────────────────────────────────
 
-export function CompletedValue({ tracker, entry, routineTarget }: { tracker: Tracker; entry: Entry; routineTarget?: number }) {
+export function CompletedValue({ tracker, entry, routineTarget, routineProgress }: { tracker: Tracker; entry: Entry; routineTarget?: number; routineProgress?: number }) {
   const c = useTheme();
   const styles = useMemo(() => makeStyles(c), [c]);
   const colorHex = getTrackerColorHex(tracker.color);
@@ -90,7 +90,14 @@ export function CompletedValue({ tracker, entry, routineTarget }: { tracker: Tra
   } else if (tracker.type === 'count') {
     // Checkbox-shaped count trackers (target === 1) never reach here — TrackerEntryRow
     // keeps QuickAction mounted for them so the checked checkbox is their done state.
-    label = `${val} / ${routineTarget ?? tracker.target ?? 1}`;
+    // Inside a routine (routineProgress provided) the label shows the routine's relative
+    // contribution / its routineTarget instead of the absolute tracker count.
+    if (routineProgress !== undefined) {
+      const t = routineTarget ?? tracker.target ?? 1;
+      label = `${Math.min(routineProgress, t)} / ${t}`;
+    } else {
+      label = `${val} / ${tracker.target ?? 1}`;
+    }
   } else {
     label = String(val);
   }
@@ -163,12 +170,15 @@ function LogQuickAction({ tracker, entry, onSave, onComplete }: {
 
 // ── QuickAction ───────────────────────────────────────────────────────────────
 
-export function QuickAction({ tracker, entry, onSave, onComplete, routineTarget }: {
+export function QuickAction({ tracker, entry, onSave, onComplete, routineTarget, routineProgress }: {
   tracker: Tracker;
   entry: Entry | undefined;
   onSave: (value: number) => void;
   onComplete: () => void;
   routineTarget?: number;
+  /** When provided (routine context), the count progress label and +1 cap use the routine's
+   *  relative contribution instead of the tracker's absolute count. */
+  routineProgress?: number;
 }) {
   const c = useTheme();
   const styles = useMemo(() => makeStyles(c), [c]);
@@ -182,6 +192,18 @@ export function QuickAction({ tracker, entry, onSave, onComplete, routineTarget 
 
   // Checkbox shape: boolean-goal trackers and count trackers with target === 1.
   if (isCheckboxControl(tracker, routineTarget)) {
+    // Inside a routine, a count tracker shown as a checkbox represents this routine's
+    // +1 contribution — its checked state and click handler must reflect the routine's
+    // own progress, NOT the shared entry value. Otherwise routines that share a tracker
+    // appear "checked" the moment any other routine bumps the count.
+    if (tracker.type === 'count' && routineProgress !== undefined) {
+      const checked = routineProgress >= 1;
+      const cap = tracker.target ?? Number.POSITIVE_INFINITY;
+      // Once this routine has recorded its contribution the checkbox is a non-interactive
+      // visual; use Reset to undo, matching the boolean-goal checkbox behavior elsewhere.
+      const handlePress = checked ? () => {} : () => onSave(Math.min(currentVal + 1, cap));
+      return <CheckboxControl checked={checked} colorHex={colorHex} onPress={handlePress} />;
+    }
     return <CheckboxControl checked={currentVal >= 1} colorHex={colorHex} onPress={() => onSave(1)} />;
   }
 
@@ -205,12 +227,18 @@ export function QuickAction({ tracker, entry, onSave, onComplete, routineTarget 
 
   // Count tracker with target > 1 — progress label + increment button.
   if (tracker.type === 'count') {
+    // In a routine: progress label shows the routine's contribution / its target; the +1 button
+    // increments the underlying entry value capped at the tracker's full daily target so the
+    // user can keep recording brushes/etc. beyond what this routine alone expects.
+    const inRoutine = routineProgress !== undefined;
+    const labelNumerator = inRoutine ? Math.min(routineProgress!, target) : currentVal;
+    const cap = inRoutine ? (tracker.target ?? Number.POSITIVE_INFINITY) : target;
     return (
       <View style={styles.countRow}>
-        <Text style={styles.countProgress}>{currentVal}/{target}</Text>
+        <Text style={styles.countProgress}>{labelNumerator}/{target}</Text>
         <AnimatedButton
           style={[styles.countBtn, { backgroundColor: colorHex }]}
-          onPress={() => onSave(Math.min(currentVal + 1, target))}>
+          onPress={() => onSave(Math.min(currentVal + 1, cap))}>
           <Text style={styles.countBtnText}>+1</Text>
         </AnimatedButton>
       </View>
