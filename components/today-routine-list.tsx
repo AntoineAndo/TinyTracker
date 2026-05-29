@@ -42,11 +42,6 @@ export function TodayRoutineList({ today, filter = 'pending' }: TodayRoutineList
     [routines, todayDow],
   );
 
-  const visibleRoutines = useMemo(
-    () => (hydrated ? activeRoutines.filter((r) => (filter === 'completed' ? isRoutineCompleted(r) : !isRoutineCompleted(r))) : []),
-    [hydrated, activeRoutines, filter, isRoutineCompleted],
-  );
-
   // Minutes since midnight, ticked once per minute so the active-window check stays
   // current without forcing the whole logical-day state to refresh. `today` from
   // useCurrentDay only updates on foreground/day rollover, so its hour/minute is
@@ -55,6 +50,21 @@ export function TodayRoutineList({ today, filter = 'pending' }: TodayRoutineList
     const d = new Date();
     return d.getHours() * 60 + d.getMinutes();
   });
+
+  // Pending routines are hidden until their start time arrives: during the active window
+  // they render expanded, after the window ends they render collapsed (as a reminder that
+  // they weren't finished), and before the window they don't appear yet. Completed
+  // routines always show in the Completed section regardless of the clock.
+  const visibleRoutines = useMemo(() => {
+    if (!hydrated) return [];
+    return activeRoutines.filter((r) => {
+      const done = isRoutineCompleted(r);
+      if (filter === 'completed') return done;
+      if (done) return false;
+      const startMinutes = r.startHour * 60 + r.startMinute;
+      return nowMinutes >= startMinutes;
+    });
+  }, [hydrated, activeRoutines, filter, isRoutineCompleted, nowMinutes]);
   useEffect(() => {
     const tick = () => {
       const d = new Date();
