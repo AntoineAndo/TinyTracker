@@ -30,6 +30,10 @@ export interface Tracker {
   /** Whether this tracker represents a goal (streak shown, "Done" label) or a neutral
    *  observation (no streak, "Yes" label). Defaults to 'goal' when absent. */
   orientation?: 'goal' | 'neutral';
+  /** Whether this tracker is currently active. Inactive trackers are hidden from
+   *  Today, the graph, and routines, but remain editable from the setup screen.
+   *  Defaults to true when absent. */
+  active?: boolean;
   createdAt: string;
 }
 

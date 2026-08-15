@@ -29,6 +29,7 @@ export type FormValues = {
   reminderHour: number;
   reminderMinute: number;
   orientation: 'goal' | 'neutral';
+  active: boolean;
 };
 
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -119,7 +120,7 @@ export function makeFormStyles(c: AppTheme) {
 
 type Styles = ReturnType<typeof makeFormStyles>;
 
-export function TrackerFormFields({ control, setValue, type, color, frequency, orientation, reminderEnabled, reminderHour, reminderMinute, c, styles, namePlaceholder, autoFocusName = false }: {
+export function TrackerFormFields({ control, setValue, type, color, frequency, orientation, reminderEnabled, reminderHour, reminderMinute, c, styles, namePlaceholder, autoFocusName = false, showActiveToggle = false }: {
   control: Control<FormValues>;
   setValue: UseFormSetValue<FormValues>;
   type: TrackerType;
@@ -133,11 +134,30 @@ export function TrackerFormFields({ control, setValue, type, color, frequency, o
   styles: Styles;
   namePlaceholder?: string;
   autoFocusName?: boolean;
+  /** Shows the Active toggle. Only relevant when editing an existing tracker. */
+  showActiveToggle?: boolean;
 }) {
   const [showTimePicker, setShowTimePicker] = useState(false);
 
   return (
     <>
+      {showActiveToggle && (
+        <Controller
+          control={control}
+          name="active"
+          render={({ field: { value, onChange } }) => (
+            <View style={styles.reminderToggleRow}>
+              <Text style={styles.reminderToggleLabel}>Active</Text>
+              <Switch
+                value={value}
+                onValueChange={onChange}
+                ios_backgroundColor={c.segmentBg}
+              />
+            </View>
+          )}
+        />
+      )}
+
       <Controller
         control={control}
         name="name"

@@ -34,6 +34,7 @@ export default function EditTrackerScreen() {
       reminderHour: tracker?.reminder?.hour ?? 20,
       reminderMinute: tracker?.reminder?.minute ?? 0,
       orientation: tracker?.orientation ?? 'goal',
+      active: tracker?.active ?? true,
     },
     mode: 'onChange',
   });
@@ -71,6 +72,7 @@ export default function EditTrackerScreen() {
         minute: data.reminderMinute,
       } : undefined,
       orientation: data.orientation,
+      active: data.active,
     });
     router.back();
   }
@@ -108,6 +110,7 @@ export default function EditTrackerScreen() {
           reminderMinute={reminderMinute}
           c={c}
           styles={styles}
+          showActiveToggle
         />
         <Pressable
           style={[styles.saveButton, { backgroundColor: TRACKER_COLORS[color].hex }, !isValid && styles.saveButtonDisabled]}

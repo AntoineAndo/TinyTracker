@@ -31,6 +31,7 @@ export default function NewTrackerScreen() {
       reminderHour: 20,
       reminderMinute: 0,
       orientation: 'goal',
+      active: true,
     },
     mode: 'onChange',
   });
@@ -60,6 +61,7 @@ export default function NewTrackerScreen() {
         minute: data.reminderMinute,
       } : undefined,
       orientation: data.orientation,
+      active: data.active,
     });
     router.back();
   }

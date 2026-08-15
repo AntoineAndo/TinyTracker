@@ -27,7 +27,7 @@ export interface InsightsResult {
  * standard global top-K feed is returned.
  */
 export function useInsights(focusedTrackerId?: string | null): InsightsResult {
-  const { trackers, entriesByTrackerByDay } = useTrackers();
+  const { activeTrackers: trackers, entriesByTrackerByDay } = useTrackers();
   const { today } = useCurrentDay();
   const { findings, ready, loading } = useCorrelations();
 

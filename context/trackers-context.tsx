@@ -31,6 +31,10 @@ const CHUNK_DAYS = 90;
 interface TrackersContextValue {
   isLoading: boolean;
   trackers: Tracker[];
+  /** Trackers with `active !== false`. Single source of truth for every screen that
+   *  should hide inactive trackers (Today, graph, routines) — the setup screen is the
+   *  only consumer that still reads the unfiltered `trackers` list. */
+  activeTrackers: Tracker[];
   entries: Entry[];
   /** Pivot keyed by trackerId then YYYY-MM-DD logical day. Most recent entry wins per cell. */
   entriesByTrackerByDay: Record<string, Record<string, Entry>>;
@@ -94,6 +98,9 @@ export function TrackersProvider({ children }: { children: React.ReactNode }) {
   const trackers = mockMode ? MOCK_TRACKERS : realTrackers;
   const entries = mockMode ? MOCK_ENTRIES : realEntries;
   const hasMoreEntries = !mockMode && loadedChunkCount < chunkIndex.length;
+
+  // `active` defaults to true when absent (pre-existing trackers created before this field existed).
+  const activeTrackers = useMemo(() => trackers.filter((t) => t.active !== false), [trackers]);
 
   // Lifted pivot: trackerId -> YYYY-MM-DD -> Entry (most recent wins per cell).
   // The graph used to recompute this locally; correlations need it too. Done
@@ -316,7 +323,7 @@ export function TrackersProvider({ children }: { children: React.ReactNode }) {
   return (
     <TrackersContext.Provider value={{
       isLoading,
-      trackers, entries,
+      trackers, activeTrackers, entries,
       entriesByTrackerByDay, oldestLoadedDay,
       hasMoreEntries, loadMoreEntries,
       mockMode, setMockMode,

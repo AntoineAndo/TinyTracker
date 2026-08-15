@@ -92,6 +92,9 @@ function makeStyles(c: AppTheme) {
     typeChip: { paddingHorizontal: Space.md, paddingVertical: 2, borderRadius: Radius.pill },
     typeChipText: { fontSize: 11, fontWeight: Weight.bold },
     cardFreq: { ...Type.caption, color: c.textSub, textTransform: 'capitalize' },
+    inactiveChip: { paddingHorizontal: Space.md, paddingVertical: 2, borderRadius: Radius.pill, backgroundColor: c.segmentBg },
+    inactiveChipText: { fontSize: 11, fontWeight: Weight.bold, color: c.textMuted },
+    cardInactive: { opacity: 0.5 },
     chevron: { color: c.textMuted, fontSize: 18, fontWeight: '300' },
     // ── Routine card ──────────────────────────────────────────
     routineCard: {
@@ -198,23 +201,32 @@ function TrackerCard({ tracker, todayEntry, onPress, styles }: {
   const partial = isCount && !!todayEntry && entryNum > 0 && !done;
 
   const typeLabel = isCount ? `Count · ×${target}` : (TYPE_LABELS[tracker.type] ?? tracker.type);
+  const isInactive = tracker.active === false;
 
   return (
-    <Pressable style={styles.card} onPress={onPress}>
+    <Pressable style={[styles.card, isInactive && styles.cardInactive]} onPress={onPress}>
       <View style={[styles.iconContainer, { backgroundColor: iconBg }]}>
         <Text style={styles.cardIcon}>{getTrackerIcon(tracker.icon)}</Text>
       </View>
       <View style={styles.cardMain}>
         <Text style={styles.cardName} numberOfLines={1}>{tracker.name}</Text>
         <View style={styles.cardMeta}>
-          <View style={[styles.typeChip, { backgroundColor: iconBg }]}>
-            <Text style={[styles.typeChipText, { color: colorHex }]}>{typeLabel}</Text>
-          </View>
-          <Text style={styles.cardFreq}>· {tracker.reminderFrequency ?? 'daily'}</Text>
-          {(done || partial) && (
-            <Text style={[styles.typeChipText, { color: colorHex }]}>
-              {done ? '✓' : `${entryNum}`}
-            </Text>
+          {isInactive ? (
+            <View style={styles.inactiveChip}>
+              <Text style={styles.inactiveChipText}>Inactive</Text>
+            </View>
+          ) : (
+            <>
+              <View style={[styles.typeChip, { backgroundColor: iconBg }]}>
+                <Text style={[styles.typeChipText, { color: colorHex }]}>{typeLabel}</Text>
+              </View>
+              <Text style={styles.cardFreq}>· {tracker.reminderFrequency ?? 'daily'}</Text>
+              {(done || partial) && (
+                <Text style={[styles.typeChipText, { color: colorHex }]}>
+                  {done ? '✓' : `${entryNum}`}
+                </Text>
+              )}
+            </>
           )}
         </View>
       </View>
