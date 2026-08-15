@@ -338,7 +338,7 @@ type EditingState = { tracker: Tracker; day: Date; entry: Entry | undefined };
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 export default function GraphScreen() {
-  const { trackers, entriesByTrackerByDay, addEntryForDate, updateEntry, deleteEntry } = useTrackers();
+  const { activeTrackers: trackers, entriesByTrackerByDay, addEntryForDate, updateEntry, deleteEntry } = useTrackers();
   const { graphShowValues } = useSettings();
   const scrollRef = useRef<ScrollView>(null);
   const c = useTheme();

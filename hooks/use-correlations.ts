@@ -23,7 +23,7 @@ export interface CorrelationsResult {
 }
 
 export function useCorrelations(): CorrelationsResult {
-  const { trackers, entriesByTrackerByDay } = useTrackers();
+  const { activeTrackers: trackers, entriesByTrackerByDay } = useTrackers();
   const { routines } = useRoutines();
   const { today } = useCurrentDay();
   const horizon = useEnsureHorizon(HORIZON_DAYS);

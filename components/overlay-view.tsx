@@ -119,7 +119,7 @@ interface OverlayViewProps {
 export function OverlayView({ windowDays = 30 }: OverlayViewProps) {
   const c = useTheme();
   const styles = useMemo(() => makeStyles(c), [c]);
-  const { trackers, entriesByTrackerByDay } = useTrackers();
+  const { activeTrackers: trackers, entriesByTrackerByDay } = useTrackers();
   const { findings } = useCorrelations();
   const { today } = useCurrentDay();
   // Frame 4 in the staggered mount sequence; bottom-most widget and typically

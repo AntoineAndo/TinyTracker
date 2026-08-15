@@ -82,7 +82,7 @@ function dueLabel(daysUntil: number): string {
 export default function TodayScreen() {
   const {
     isLoading,
-    trackers: allTrackers,
+    activeTrackers: allTrackers,
     entries,
     addEntry,
     updateEntry,

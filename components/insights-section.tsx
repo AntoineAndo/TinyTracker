@@ -172,7 +172,7 @@ export function InsightsSection({ focusedTrackerId }: InsightsSectionProps = {})
   // Frame 3 in the staggered mount sequence (grid=1, constellation=2, this=3,
   // overlay=4). One heavy widget per frame instead of one giant blocking mount.
   const mounted = useDeferMount(3);
-  const { trackers } = useTrackers();
+  const { activeTrackers: trackers } = useTrackers();
   const { insights, ready, loading } = useInsights(focusedTrackerId);
 
   const focusedTracker = useMemo(

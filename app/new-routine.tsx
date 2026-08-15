@@ -11,7 +11,7 @@ import { useTheme } from '@/hooks/use-theme';
 export default function NewRoutineScreen() {
   const router = useRouter();
   const { addRoutine } = useRoutines();
-  const { trackers } = useTrackers();
+  const { activeTrackers: trackers } = useTrackers();
   const c = useTheme();
   const styles = useMemo(() => makeRoutineFormStyles(c), [c]);
 

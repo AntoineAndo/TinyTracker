@@ -27,7 +27,7 @@ type TodayRoutineListProps = {
 };
 
 export function TodayRoutineList({ today, filter = 'pending' }: TodayRoutineListProps) {
-  const { trackers, addEntry, updateEntry, completeEntry, isLoading: trackersLoading } = useTrackers();
+  const { activeTrackers: trackers, addEntry, updateEntry, completeEntry, isLoading: trackersLoading } = useTrackers();
   const { routines, isRoutineCompleted, markAllDone, resetRoutine, currentPeriodEntryMap, currentPeriodProgressMap, recordRoutineContribution, isLoading: routinesLoading } = useRoutines();
   // Wait for both contexts to hydrate before rendering so a completed routine
   // doesn't flash as incomplete while entries are still loading.

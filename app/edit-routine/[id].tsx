@@ -12,7 +12,7 @@ export default function EditRoutineScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { routines, updateRoutine, deleteRoutine } = useRoutines();
-  const { trackers } = useTrackers();
+  const { activeTrackers: trackers } = useTrackers();
   const c = useTheme();
   const styles = useMemo(() => makeRoutineFormStyles(c), [c]);
 

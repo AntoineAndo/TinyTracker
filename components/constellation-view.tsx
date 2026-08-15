@@ -88,7 +88,7 @@ export interface ConstellationViewProps {
 export function ConstellationView({ focusedId, onFocusChange }: ConstellationViewProps) {
   const c = useTheme();
   const styles = useMemo(() => makeStyles(c), [c]);
-  const { trackers } = useTrackers();
+  const { activeTrackers: trackers } = useTrackers();
   const { findings } = useCorrelations();
   // Frame 2 in the staggered mount sequence (grid=1, this=2, insights=3, overlay=4).
   const mounted = useDeferMount(2);

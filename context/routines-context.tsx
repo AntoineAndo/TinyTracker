@@ -39,7 +39,9 @@ export function RoutinesProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [routines, setRoutines] = useState<Routine[]>([]);
   const [progressRecords, setProgressRecords] = useState<RoutineProgress[]>([]);
-  const { trackers, entries, addEntry, updateEntry, completeEntry, deleteEntry } = useTrackers();
+  // Inactive trackers are treated the same as deleted ones here (see isRoutineCompleted's
+  // "stale ID" fallback) so routines silently skip/complete around them.
+  const { activeTrackers: trackers, entries, addEntry, updateEntry, completeEntry, deleteEntry } = useTrackers();
   const { today } = useCurrentDay();
   const { dayStartHour } = useSettings();
   // Ref mirror of progressRecords so back-to-back recordRoutineContribution calls
